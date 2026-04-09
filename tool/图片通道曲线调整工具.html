@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>图片通道曲线调整工具</title>
+    <style>
+        * {
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+        }
+        body {
+            background: #12121a;
+            font-family: 'Segoe UI', 'Roboto', 'Inter', system-ui, -apple-system, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 16px;
+        }
+        
+        .main-panel {
+            display: flex;
+            flex-wrap: wrap;
+            padding: 20px;
+            gap: 24px;
+            justify-content: center;
+        }
+        /* 曲线编辑区 */
+        .curve-section {
+            flex: 1.2;
+            min-width: 300px;
+            background: #252631;
+            padding: 18px;
+            box-shadow: 0 8px 18px rgba(0,0,0,0.3);
+        }
+        .curve-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+            gap: 12px;
+        }
+        /* 多选联动区 */
+        .multi-channel-panel {
+            background: #1e1f29;
+            padding: 5px 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .multi-title {
+            font-size: 0.7rem;
+            color: #9ca3af;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+        .channel-check {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .check-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #2a2b38;
+            padding: 5px 12px;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: 0.1s;
+            touch-action: manipulation;
+        }
+        .check-item input {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            margin: 0;
+            accent-color: #4f46e5;
+        }
+        .check-item label {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #ddd;
+            cursor: pointer;
+        }
+        .sync-btn {
+            background: #3b3e5c;
+            border: none;
+            color: white;
+            font-size: 0.7rem;
+            padding: 5px 12px;
+            border-radius: 30px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .sync-btn:active { background: #5a5e84; }
+        .reset-curve {
+            background: #3a3b47;
+            border: none;
+            color: #f0f0f0;
+            padding: 8px 20px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.85rem;
+            touch-action: manipulation;
+            transition: 0.2s;
+        }
+        .reset-curve:active { background: #5b5c6e; }
+        .global-reset {
+            background: #3a3b47;
+            border: none;
+            color: white;
+            padding: 8px 18px;
+            border-radius: 60px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            touch-action: manipulation;
+        }
+        .canvas-curve-wrapper {
+            background: #0f0f17;
+            padding: 8px;
+            box-shadow: inset 0 1px 4px #00000040, 0 4px 12px rgba(0,0,0,0.3);
+            margin-top: 8px;
+        }
+        #curveCanvas {
+            display: block;
+            width: 100%;
+            background: #0a0a10;
+            cursor: crosshair;
+            touch-action: none;
+            box-shadow: 0 0 0 1px #3e3f4e;
+        }
+        .curve-tips {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 14px;
+            font-size: 11px;
+            color: #9ca3af;
+            padding: 0 4px;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .edit-badge {
+            background: #4f46e5;
+            color: white;
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        /* 预览区 */
+        .preview-section {
+            flex: 1;
+            min-width: 300px;
+            background: #252631;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .image-card {
+            background: #1e1f2c;
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+        }
+        .image-title {
+            padding: 14px 20px;
+            background: #2a2b38;
+            font-weight: 600;
+            color: #eee;
+            border-bottom: 1px solid #3a3b47;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .canvas-image-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #12121a;
+            padding: 20px;
+            min-height: 280px;
+        }
+        canvas.preview-canvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            box-shadow: 0 6px 14px black;
+            background: #25262e;
+        }
+        .upload-area {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 4px;
+        }
+        .file-label {
+            background: #4f46e5;
+            color: white;
+            padding: 12px 28px;
+            border-radius: 60px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+            font-size: 0.9rem;
+            display: inline-block;
+            text-align: center;
+            touch-action: manipulation;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .file-label:active { background: #6366f1; }
+        input[type="file"] { display: none; }
+        .info-text {
+            color: #aaa;
+            font-size: 0.75rem;
+            background: #1e1f2c;
+            padding: 6px 14px;
+            border-radius: 40px;
+        }
+        hr { border-color: #3a3b47; margin: 8px 0; }
+        button { cursor: pointer; }
+        @media (max-width: 750px) {
+            .main-panel { padding: 12px; gap: 18px; }
+            .curve-section { padding: 14px; }
+            .channel-btn { padding: 6px 14px; font-size: 0.75rem; }
+            .check-item label { font-size: 0.7rem; }
+            .check-item { padding: 3px 8px; }
+            .multi-channel-panel { gap: 8px; }
+            .curve-tips { font-size: 9px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-panel">
+        <!-- 预览区 + 上传 -->
+        <div class="preview-section">
+            <div class="image-card">
+                <div class="image-title">
+                    图片通道曲线调整
+                </div>
+                <div class="canvas-image-container">
+                    <canvas id="adjustedCanvas" class="preview-canvas" style="max-width:100%;"></canvas>
+                </div>
+            </div>
+            <div class="canvas-curve-wrapper">
+                <canvas id="curveCanvas" width="600" height="400" style="width:100%; height:auto; aspect-ratio:600/400; touch-action: none;"></canvas>
+            </div>
+            <div class="curve-tips">
+                <span>👆 点击/触摸曲线添加点 | 拖拽点移动 | 长按/右键删除点</span>
+                <span>📐 多选通道后，曲线操作同时影响所有选中通道</span>
+            </div>
+            <div class="edit-badge" style="margin-top: 8px; justify-content: center;">
+                🎛️ 当前编辑通道: <span id="editingChannelsLabel">红色</span>
+            </div>
+            <div class="upload-area">
+                <label class="file-label">
+                    📂 上传图片
+                    <input type="file" id="uploadImage" accept="image/jpeg,image/png,image/webp,image/bmp">
+                </label>
+            </div>
+        </div>
+        <!-- 曲线编辑区 -->
+        <div class="curve-section">
+            <div class="curve-header">
+                <div class="dual-control">
+                    <div class="multi-channel-panel">
+                        <span class="multi-title">✚ 联动编辑:</span>
+                        <div class="channel-check">
+                            <div class="check-item" data-check="red">
+                                <input type="checkbox" id="chkRed" value="red" checked> <label for="chkRed">🔴 红</label>
+                            </div>
+                            <div class="check-item" data-check="green">
+                                <input type="checkbox" id="chkGreen" value="green"> <label for="chkGreen">🟢 绿</label>
+                            </div>
+                            <div class="check-item" data-check="blue">
+                                <input type="checkbox" id="chkBlue" value="blue"> <label for="chkBlue">🔵 蓝</label>
+                            </div>
+                        </div>
+                        <button id="syncChannelsBtn" class="sync-btn">🔄 同步曲线</button>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button id="resetCurveBtn" class="reset-curve">⟳ 重置联动通道</button>
+                    <button id="globalResetBtn" class="global-reset">🔄 全部重置</button>
+                </div>
+                <div class="info-text">JPG / PNG / WebP | 曲线实时调色</div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    (function(){
+        // ---------- 全局变量 ----------
+        let originalImageData = null;      // 原始图像数据
+        let originalImgWidth = 0, originalImgHeight = 0;
+        
+        // 三个通道的控制点 (每个都是 {x,y} 0-255)
+        let redPoints   = [{x:0, y:0}, {x:255, y:255}];
+        let greenPoints = [{x:0, y:0}, {x:255, y:255}];
+        let bluePoints  = [{x:0, y:0}, {x:255, y:255}];
+        
+        // 显示通道 (用于曲线绘制)
+        let displayChannel = 'red';       // 'red', 'green', 'blue'
+        
+        // 多选编辑通道集合 (选中的通道将同步曲线操作)
+        let editingChannels = new Set(['red']);   // 默认只编辑红色
+        
+        // LUT表
+        let redLUT = new Array(256);
+        let greenLUT = new Array(256);
+        let blueLUT = new Array(256);
+        
+        // 曲线画布元素
+        const curveCanvas = document.getElementById('curveCanvas');
+        const ctx = curveCanvas.getContext('2d');
+        let canvasWidth = 600, canvasHeight = 400;
+        curveCanvas.width = canvasWidth;
+        curveCanvas.height = canvasHeight;
+        
+        // 边距
+        const padding = { left: 44, right: 28, top: 28, bottom: 38 };
+        let graphWidth = canvasWidth - padding.left - padding.right;
+        let graphHeight = canvasHeight - padding.top - padding.bottom;
+        
+        // 交互状态
+        let selectedPointIndex = -1;
+        let isDraggingPoint = false;
+        let longPressTimer = null;
+        
+        const adjustedCanvas = document.getElementById('adjustedCanvas');
+        const adjCtx = adjustedCanvas.getContext('2d');
+        
+        // DOM 元素
+        const fileInput = document.getElementById('uploadImage');
+        const resetCurveBtn = document.getElementById('resetCurveBtn');
+        const globalResetBtn = document.getElementById('globalResetBtn');
+        const channelBtns = document.querySelectorAll('.channel-btn');
+        const chkRed = document.getElementById('chkRed');
+        const chkGreen = document.getElementById('chkGreen');
+        const chkBlue = document.getElementById('chkBlue');
+        const syncChannelsBtn = document.getElementById('syncChannelsBtn');
+        const editingChannelsLabel = document.getElementById('editingChannelsLabel');
+        
+        // ---------- 辅助函数 ----------
+        function updateGraphDimensions() {
+            graphWidth = canvasWidth - padding.left - padding.right;
+            graphHeight = canvasHeight - padding.top - padding.bottom;
+        }
+        
+        function toCanvasCoords(x, y) {
+            const canvasX = padding.left + (x / 255) * graphWidth;
+            const canvasY = canvasHeight - padding.bottom - (y / 255) * graphHeight;
+            return { x: canvasX, y: canvasY };
+        }
+        
+        function toLogicalCoords(canvasX, canvasY) {
+            let rawX = (canvasX - padding.left) / graphWidth * 255;
+            let rawY = (canvasHeight - padding.bottom - canvasY) / graphHeight * 255;
+            rawX = Math.min(255, Math.max(0, rawX));
+            rawY = Math.min(255, Math.max(0, rawY));
+            return { x: rawX, y: rawY };
+        }
+        
+        // CatmullRom 样条插值生成平滑曲线点集
+        function catmullRomCurve(points, stepsPerSegment = 22) {
+            if (!points.length) return [];
+            if (points.length === 1) return [points[0]];
+            if (points.length === 2) {
+                const result = [];
+                for (let i = 0; i <= stepsPerSegment; i++) {
+                    const t = i / stepsPerSegment;
+                    const x = points[0].x + (points[1].x - points[0].x) * t;
+                    const y = points[0].y + (points[1].y - points[0].y) * t;
+                    result.push({ x, y });
+                }
+                return result;
+            }
+            const result = [];
+            const extended = [points[0], points[0], ...points, points[points.length-1], points[points.length-1]];
+            for (let i = 0; i < extended.length - 3; i++) {
+                const p0 = extended[i];
+                const p1 = extended[i+1];
+                const p2 = extended[i+2];
+                const p3 = extended[i+3];
+                if (i === 0 && points.length > 1) continue;
+                if (i === extended.length-4 && points.length > 1) continue;
+                for (let s = 0; s <= stepsPerSegment; s++) {
+                    const t = s / stepsPerSegment;
+                    const t2 = t * t;
+                    const t3 = t2 * t;
+                    const x = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2*p0.x -5*p1.x + 4*p2.x - p3.x) * t2 + (-p0.x + 3*p1.x - 3*p2.x + p3.x) * t3);
+                    const y = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2*p0.y -5*p1.y + 4*p2.y - p3.y) * t2 + (-p0.y + 3*p1.y - 3*p2.y + p3.y) * t3);
+                    result.push({ x: Math.min(255, Math.max(0, x)), y: Math.min(255, Math.max(0, y)) });
+                }
+            }
+            const unique = [];
+            for (let pt of result) {
+                if (unique.length === 0 || Math.abs(pt.x - unique[unique.length-1].x) > 0.8 || Math.abs(pt.y - unique[unique.length-1].y) > 0.8) {
+                    unique.push(pt);
+                }
+            }
+            if (unique.length && (Math.abs(unique[0].x - points[0].x) > 0.5)) unique.unshift({x:points[0].x, y:points[0].y});
+            if (unique.length && (Math.abs(unique[unique.length-1].x - points[points.length-1].x) > 0.5)) unique.push({x:points[points.length-1].x, y:points[points.length-1].y});
+            return unique;
+        }
+        
+        function generateLUTFromCurvePoints(curvePoints) {
+            const lut = new Array(256);
+            if (!curvePoints.length) {
+                for (let i=0;i<256;i++) lut[i]=i;
+                return lut;
+            }
+            const sorted = [...curvePoints].sort((a,b)=>a.x-b.x);
+            let idx = 0;
+            for (let input = 0; input <= 255; input++) {
+                while (idx < sorted.length-1 && sorted[idx+1].x < input) idx++;
+                const p1 = sorted[idx];
+                const p2 = sorted[idx+1];
+                if (!p2 || input <= p1.x) lut[input] = Math.min(255, Math.max(0, Math.round(p1.y)));
+                else if (input >= p2.x) lut[input] = Math.min(255, Math.max(0, Math.round(p2.y)));
+                else {
+                    const t = (input - p1.x) / (p2.x - p1.x);
+                    lut[input] = Math.min(255, Math.max(0, Math.round(p1.y + (p2.y - p1.y) * t)));
+                }
+            }
+            return lut;
+        }
+        
+        function updateLUTForChannel(channel) {
+            let points = (channel === 'red') ? redPoints : (channel === 'green') ? greenPoints : bluePoints;
+            const smoothCurve = catmullRomCurve(points, 22);
+            const lut = generateLUTFromCurvePoints(smoothCurve);
+            if (channel === 'red') redLUT = lut;
+            else if (channel === 'green') greenLUT = lut;
+            else blueLUT = lut;
+        }
+        
+        function updateAllLUTs() {
+            updateLUTForChannel('red');
+            updateLUTForChannel('green');
+            updateLUTForChannel('blue');
+        }
+        
+        // 关键: 将所有编辑通道的点集同步为当前显示通道的点集 (深拷贝)
+        function syncEditingChannelsToDisplay() {
+            let sourcePoints;
+            if (displayChannel === 'red') sourcePoints = redPoints;
+            else if (displayChannel === 'green') sourcePoints = greenPoints;
+            else sourcePoints = bluePoints;
+            const cloned = JSON.parse(JSON.stringify(sourcePoints));
+            for (let ch of editingChannels) {
+                if (ch === 'red') redPoints = JSON.parse(JSON.stringify(cloned));
+                else if (ch === 'green') greenPoints = JSON.parse(JSON.stringify(cloned));
+                else if (ch === 'blue') bluePoints = JSON.parse(JSON.stringify(cloned));
+            }
+            updateAllLUTs();
+            drawCurve();
+            refreshImageFromCurves();
+        }
+        
+        // 刷新调整后图片
+        function refreshImageFromCurves() {
+            if (!originalImageData) return;
+            updateAllLUTs();
+            applyCurvesToImage();
+        }
+        
+        function applyCurvesToImage() {
+            if (!originalImageData) return;
+            const width = originalImgWidth;
+            const height = originalImgHeight;
+            const srcData = originalImageData.data;
+            const newImageData = new ImageData(width, height);
+            const dstData = newImageData.data;
+            for (let i = 0; i < srcData.length; i += 4) {
+                dstData[i] = redLUT[srcData[i]];
+                dstData[i+1] = greenLUT[srcData[i+1]];
+                dstData[i+2] = blueLUT[srcData[i+2]];
+                dstData[i+3] = srcData[i+3];
+            }
+            adjustedCanvas.width = width;
+            adjustedCanvas.height = height;
+            adjCtx.putImageData(newImageData, 0, 0);
+        }
+        
+        // 获取当前显示通道的点集
+        function getDisplayPoints() {
+            if (displayChannel === 'red') return redPoints;
+            if (displayChannel === 'green') return greenPoints;
+            return bluePoints;
+        }
+        
+        // 绘制曲线 (基于显示通道)
+        function drawCurve() {
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+            ctx.strokeStyle = "#3c3d52";
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 4; i++) {
+                const x = padding.left + (i * graphWidth / 4);
+                ctx.beginPath();
+                ctx.moveTo(x, padding.top);
+                ctx.lineTo(x, canvasHeight - padding.bottom);
+                ctx.stroke();
+                const y = canvasHeight - padding.bottom - (i * graphHeight / 4);
+                ctx.beginPath();
+                ctx.moveTo(padding.left, y);
+                ctx.lineTo(canvasWidth - padding.right, y);
+                ctx.stroke();
+            }
+            ctx.beginPath();
+            ctx.strokeStyle = "#aaa";
+            ctx.lineWidth = 1.5;
+            ctx.moveTo(padding.left, canvasHeight-padding.bottom);
+            ctx.lineTo(canvasWidth-padding.right, canvasHeight-padding.bottom);
+            ctx.moveTo(padding.left, padding.top);
+            ctx.lineTo(padding.left, canvasHeight-padding.bottom);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.setLineDash([6, 8]);
+            ctx.strokeStyle = "#6b6b8a";
+            const startDiag = toCanvasCoords(0,0);
+            const endDiag = toCanvasCoords(255,255);
+            ctx.moveTo(startDiag.x, startDiag.y);
+            ctx.lineTo(endDiag.x, endDiag.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            const currentPoints = getDisplayPoints();
+            const smoothCurve = catmullRomCurve(currentPoints, 28);
+            if (smoothCurve.length >= 2) {
+                let curveColor = '#ff5e7e';
+                if (displayChannel === 'green') curveColor = '#6eff9e';
+                if (displayChannel === 'blue') curveColor = '#6ea8fe';
+                ctx.beginPath();
+                ctx.lineWidth = 3.5;
+                ctx.strokeStyle = curveColor;
+                const first = toCanvasCoords(smoothCurve[0].x, smoothCurve[0].y);
+                ctx.moveTo(first.x, first.y);
+                for (let i = 1; i < smoothCurve.length; i++) {
+                    const p = toCanvasCoords(smoothCurve[i].x, smoothCurve[i].y);
+                    ctx.lineTo(p.x, p.y);
+                }
+                ctx.stroke();
+            }
+            // 绘制控制点
+            for (let i = 0; i < currentPoints.length; i++) {
+                const cp = currentPoints[i];
+                const pos = toCanvasCoords(cp.x, cp.y);
+                ctx.beginPath();
+                ctx.fillStyle = (i === selectedPointIndex) ? '#ffc107' : '#ffffff';
+                ctx.arc(pos.x, pos.y, 9, 0, 2*Math.PI);
+                ctx.fill();
+                ctx.strokeStyle = '#1e1f2c';
+                ctx.lineWidth = 1.8;
+                ctx.stroke();
+                ctx.fillStyle = '#f0f0f0';
+                ctx.font = 'bold 11px "Segoe UI"';
+                ctx.fillText(`${Math.round(cp.x)},${Math.round(cp.y)}`, pos.x+10, pos.y-6);
+            }
+        }
+        
+        // ---- 多选联动核心: 编辑动作应用到所有 editingChannels ----
+        function applyToEditingChannels(operationFn) {
+            // 先确保所有编辑通道与显示通道点集结构同步 (避免索引错位)
+            if (editingChannels.size > 1) {
+                syncEditingChannelsToDisplay();
+            }
+            // 执行操作 (基于显示通道的点集修改)
+            const displayPoints = getDisplayPoints();
+            const backupDisplayPoints = JSON.parse(JSON.stringify(displayPoints));
+            // 调用操作，可能会修改 displayPoints 数组内容 (直接修改引用)
+            operationFn(displayPoints);
+            // 将修改后的显示通道点集规范化 (端点保护 & 排序去重)
+            let finalPoints = displayPoints;
+            finalPoints.sort((a,b)=>a.x-b.x);
+            if (finalPoints[0].x > 0) finalPoints.unshift({x:0, y:0});
+            if (finalPoints[finalPoints.length-1].x < 255) finalPoints.push({x:255, y:255});
+            for (let i=1;i<finalPoints.length;i++) {
+                if (Math.abs(finalPoints[i].x - finalPoints[i-1].x) < 1.2) {
+                    finalPoints.splice(i,1);
+                    i--;
+                }
+            }
+            // 更新显示通道点集
+            if (displayChannel === 'red') redPoints = finalPoints;
+            else if (displayChannel === 'green') greenPoints = finalPoints;
+            else bluePoints = finalPoints;
+            
+            // 应用到所有编辑通道 (深拷贝)
+            const clonedFinal = JSON.parse(JSON.stringify(finalPoints));
+            for (let ch of editingChannels) {
+                if (ch === 'red') redPoints = JSON.parse(JSON.stringify(clonedFinal));
+                else if (ch === 'green') greenPoints = JSON.parse(JSON.stringify(clonedFinal));
+                else if (ch === 'blue') bluePoints = JSON.parse(JSON.stringify(clonedFinal));
+            }
+            refreshImageFromCurves();
+            drawCurve();
+        }
+        
+        // 添加点 (基于显示通道坐标)
+        function addPointToDisplay(logicalX, logicalY) {
+            applyToEditingChannels((points) => {
+                const exists = points.some(p => Math.abs(p.x - logicalX) < 1.8);
+                if (!exists) {
+                    points.push({ x: Math.min(255, Math.max(0, logicalX)), y: Math.min(255, Math.max(0, logicalY)) });
+                }
+            });
+        }
+        
+        // 删除选中的点 (基于当前显示通道选中的索引)
+        function deleteSelectedPointOnDisplay() {
+            if (selectedPointIndex === -1) return;
+            applyToEditingChannels((points) => {
+                if (points.length > 2 && selectedPointIndex >= 0 && selectedPointIndex < points.length) {
+                    points.splice(selectedPointIndex, 1);
+                }
+            });
+            selectedPointIndex = -1;
+        }
+        
+        // 移动点: 更新显示通道中选中点的坐标, 同步其他编辑通道
+        function moveSelectedPoint(newX, newY) {
+            if (selectedPointIndex === -1) return;
+            applyToEditingChannels((points) => {
+                if (selectedPointIndex >= 0 && selectedPointIndex < points.length) {
+                    let curPoint = points[selectedPointIndex];
+                    let nx = newX, ny = newY;
+                    if (curPoint.x === 0) nx = 0;
+                    if (curPoint.x === 255) nx = 255;
+                    nx = Math.min(255, Math.max(0, nx));
+                    ny = Math.min(255, Math.max(0, ny));
+                    points[selectedPointIndex] = { x: nx, y: ny };
+                }
+            });
+        }
+        
+        // 重置联动通道曲线 (重置所有选中的通道为线性)
+        function resetEditingChannelsCurve() {
+            const linear = [{x:0, y:0}, {x:255, y:255}];
+            for (let ch of editingChannels) {
+                if (ch === 'red') redPoints = JSON.parse(JSON.stringify(linear));
+                else if (ch === 'green') greenPoints = JSON.parse(JSON.stringify(linear));
+                else if (ch === 'blue') bluePoints = JSON.parse(JSON.stringify(linear));
+            }
+            selectedPointIndex = -1;
+            refreshImageFromCurves();
+            drawCurve();
+        }
+        
+        function resetAllCurves() {
+            const linear = [{x:0, y:0}, {x:255, y:255}];
+            redPoints = JSON.parse(JSON.stringify(linear));
+            greenPoints = JSON.parse(JSON.stringify(linear));
+            bluePoints = JSON.parse(JSON.stringify(linear));
+            selectedPointIndex = -1;
+            refreshImageFromCurves();
+            drawCurve();
+        }
+        
+        // 更新多选UI及标签
+        function updateEditingChannelsFromCheckboxes() {
+            editingChannels.clear();
+            if (chkRed.checked) editingChannels.add('red');
+            if (chkGreen.checked) editingChannels.add('green');
+            if (chkBlue.checked) editingChannels.add('blue');
+            if (editingChannels.size === 0) {
+                // 防止无编辑通道，默认红色
+                chkRed.checked = true;
+                editingChannels.add('red');
+            }
+            let names = [];
+            if (editingChannels.has('red')) names.push('红色');
+            if (editingChannels.has('green')) names.push('绿色');
+            if (editingChannels.has('blue')) names.push('蓝色');
+            editingChannelsLabel.innerText = names.join(', ');
+            drawCurve();
+        }
+        
+        function setDisplayChannel(channel) {
+            displayChannel = channel;
+            channelBtns.forEach(btn => {
+                if (btn.dataset.channel === channel) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+            selectedPointIndex = -1;
+            drawCurve();
+        }
+        
+        // 加载图片时重置所有曲线，并重置联动为红色默认
+        function loadImage(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    originalImgWidth = img.width;
+                    originalImgHeight = img.height;
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = img.width;
+                    tempCanvas.height = img.height;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    tempCtx.drawImage(img, 0, 0);
+                    originalImageData = tempCtx.getImageData(0, 0, img.width, img.height);
+                    // 重置所有曲线
+                    resetAllCurves();
+                    // 确保编辑通道为红色且显示红色
+                    editingChannels.clear();
+                    editingChannels.add('red');
+                    chkRed.checked = true;
+                    chkGreen.checked = false;
+                    chkBlue.checked = false;
+                    updateEditingChannelsFromCheckboxes();
+                    setDisplayChannel('red');
+                    refreshImageFromCurves();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        // 事件绑定与交互
+        function getCanvasCoords(e) {
+            const rect = curveCanvas.getBoundingClientRect();
+            const scaleX = curveCanvas.width / rect.width;
+            const scaleY = curveCanvas.height / rect.height;
+            let clientX, clientY;
+            if (e.touches) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            let canvasX = (clientX - rect.left) * scaleX;
+            let canvasY = (clientY - rect.top) * scaleY;
+            canvasX = Math.min(canvasWidth, Math.max(0, canvasX));
+            canvasY = Math.min(canvasHeight, Math.max(0, canvasY));
+            return { x: canvasX, y: canvasY };
+        }
+        
+        function findNearestPoint(mouseX, mouseY, threshold = 24) {
+            const points = getDisplayPoints();
+            let minDist = threshold;
+            let index = -1;
+            for (let i = 0; i < points.length; i++) {
+                const pos = toCanvasCoords(points[i].x, points[i].y);
+                const dx = pos.x - mouseX;
+                const dy = pos.y - mouseY;
+                const dist = Math.sqrt(dx*dx+dy*dy);
+                if (dist < minDist) {
+                    minDist = dist;
+                    index = i;
+                }
+            }
+            return index;
+        }
+        
+        function onPointerStart(e) {
+            e.preventDefault();
+            const { x, y } = getCanvasCoords(e);
+            const index = findNearestPoint(x, y, 28);
+            if (index !== -1) {
+                selectedPointIndex = index;
+                isDraggingPoint = true;
+                drawCurve();
+                if (longPressTimer) clearTimeout(longPressTimer);
+                longPressTimer = setTimeout(() => {
+                    if (selectedPointIndex !== -1 && !isDraggingPoint) {
+                        deleteSelectedPointOnDisplay();
+                        longPressTimer = null;
+                    }
+                }, 500);
+            } else {
+                const logical = toLogicalCoords(x, y);
+                addPointToDisplay(logical.x, logical.y);
+                drawCurve();
+            }
+        }
+        
+        function onPointerMove(e) {
+            if (!isDraggingPoint || selectedPointIndex === -1) return;
+            e.preventDefault();
+            const { x, y } = getCanvasCoords(e);
+            const logical = toLogicalCoords(x, y);
+            moveSelectedPoint(logical.x, logical.y);
+        }
+        
+        function onPointerEnd(e) {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            isDraggingPoint = false;
+            selectedPointIndex = -1;
+            drawCurve();
+        }
+        
+        function onContext(e) {
+            e.preventDefault();
+            deleteSelectedPointOnDisplay();
+            return false;
+        }
+        
+        function initEvents() {
+            curveCanvas.addEventListener('mousedown', onPointerStart);
+            window.addEventListener('mousemove', onPointerMove);
+            window.addEventListener('mouseup', onPointerEnd);
+            curveCanvas.addEventListener('touchstart', onPointerStart, { passive: false });
+            curveCanvas.addEventListener('touchmove', onPointerMove, { passive: false });
+            curveCanvas.addEventListener('touchend', onPointerEnd);
+            curveCanvas.addEventListener('contextmenu', onContext);
+            document.addEventListener('keydown', (e) => { if (e.key === 'Delete' || e.key === 'Del') deleteSelectedPointOnDisplay(); });
+            fileInput.addEventListener('change', (e) => { if (e.target.files && e.target.files[0]) loadImage(e.target.files[0]); });
+            resetCurveBtn.addEventListener('click', () => resetEditingChannelsCurve());
+            globalResetBtn.addEventListener('click', () => resetAllCurves());
+            channelBtns.forEach(btn => {
+                btn.addEventListener('click', () => setDisplayChannel(btn.dataset.channel));
+            });
+            chkRed.addEventListener('change', () => { updateEditingChannelsFromCheckboxes(); drawCurve(); });
+            chkGreen.addEventListener('change', () => { updateEditingChannelsFromCheckboxes(); drawCurve(); });
+            chkBlue.addEventListener('change', () => { updateEditingChannelsFromCheckboxes(); drawCurve(); });
+            syncChannelsBtn.addEventListener('click', () => { syncEditingChannelsToDisplay(); refreshImageFromCurves(); });
+        }
+        
+        function init() {
+            updateGraphDimensions();
+            updateAllLUTs();
+            drawCurve();
+            initEvents();
+            setDisplayChannel('red');
+            updateEditingChannelsFromCheckboxes();
+        }
+        init();
+    })();
+</script>
+</body>
+</html>
