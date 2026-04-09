@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文本编辑器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        ul {
+            display: flex;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+
+        li {
+            margin-right: 15px;
+        }
+
+        li:last-child {
+            margin-right: 0;
+        }
+        
+        .menuTop {
+        	margin-bottom: 10px;
+			position: relative;
+        }
+        
+        textarea {
+            tab-size: 4;
+            white-space: nowrap;
+            width: 100%;
+            height: 500px;
+        }
+        
+        #showIntime {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            padding: 20px;
+            min-height: 200px;
+        }
+
+        #consoleBuildin {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            height: 200px;
+            background-color: #f0f0f0;
+            border-top: 2px solid #ccc;
+            z-index: 9999;
+            /* #display: flex; */
+            flex-direction: column;
+        }
+
+        #consoleBuildinDot {
+            width: 10px;
+            height: 10px;
+            background-color: #888;
+            border-radius: 50%;
+            position: absolute;
+            left: 50%;
+            top: -5px;
+            transform: translateX(-50%);
+            cursor: ns-resize;
+        }
+
+        #emptyBox {
+            height: 200px;
+        }
+
+        #clearConsole {
+            font-weight: normal;
+            padding: 2px 10px;
+            cursor: pointer;
+        }
+
+        .consoleHeader {
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 5px; 
+            font-weight: bold; 
+            border-bottom: 1px solid #ccc;
+        }
+        
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 6px;
+            background-color: #ffffff;
+            min-width: 150px;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            z-index: 10000;
+            font-weight: normal;
+            backdrop-filter: blur(2px);
+        }
+        
+        /* 下拉项 ———— 继承原有字体、间距感觉 */
+        .dropdown-item {
+            font-size: 14px;
+            color: #222;
+            cursor: pointer;
+            transition: background-color 0.1s;
+            white-space: nowrap;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+        
+        .dropdown-item:hover {
+            background-color: #f5f5f5;
+        }
+        
+        /* 分隔线 */
+        .dropdown-divider {
+            height: 1px;
+            background-color: #eaeaea;
+            margin: 4px 0;
+        }
+
+		.viewport-wrapper {
+            position: relative;
+        }
+
+        .hex-input {
+            width: 36px;
+            background: #336666;
+            border: 1.5px solid #5f9ea0;
+            color: #f0f9ff;
+            font-family: inherit;
+            font-size: 12px;
+            text-align: center;
+            border-radius: 6px;
+            padding: 4px 0;
+            outline: none;
+            box-shadow: 0 0 5px #3f8db0;
+        }
+
+        .search-input {
+            width: 90px;
+            background: white;
+            border: 1px solid #3a526b;
+            color: black;
+            padding: 6px 8px;
+            font-size: 0.8rem;
+            text-align: center;
+        }
+
+        .hex-viewport {
+            background: white;
+            border-radius: 0;
+            border-top: 1px solid #1e2a35;
+            border-bottom: 1px solid #1e2a35;
+            overflow-y: auto;
+            height: 55vh;
+            max-height: 580px;
+            min-height: 320px;
+            position: relative;
+            scroll-behavior: auto;
+            -webkit-overflow-scrolling: touch;
+            transition: opacity 0.2s;
+            width: 100%;
+            margin: 0;
+        }
+
+        .hex-viewport.processing {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .scroll-spacer {
+            position: relative;
+            width: 100%;
+        }
+
+        .chunk {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            font-size: 12px;
+            line-height: 1.6;
+            border-bottom: 1px solid #253545;
+            padding: 2px 0;
+            background: white;
+            overflow: hidden;
+            will-change: transform;
+        }
+
+        .hex-row {
+            display: flex;
+            padding: 0 4px;
+            white-space: nowrap;
+            line-height: 22px;
+        }
+
+        .offset {
+            width: 70px;
+            color: #7f9fbf;
+            user-select: none;
+            flex-shrink: 0;
+            font-size: 11px;
+        }
+
+        .hex-bytes {
+            flex: 1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1px 3px;
+            margin: 0 4px;
+        }
+
+        .hex-byte {
+            display: inline-block;
+            width: 24px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 4px;
+            padding: 0 1px;
+            transition: background 0.1s;
+            user-select: none;
+            font-size: 11px;
+            touch-action: manipulation;
+        }
+
+        .hex-byte:hover {
+            background: #b0c7e0;
+        }
+
+        .hex-byte.modified {
+            background: #b0c7e0;
+            color: #f7d9a4;
+            font-weight: 500;
+            box-shadow: inset 0 0 0 1px #c29a4a;
+        }
+
+        .hex-byte.search-highlight {
+            background: #2a5f5f;
+            box-shadow: inset 0 0 0 1px #7ad0d0;
+        }
+
+        .hex-byte.search-highlight-current {
+            background: #1e7a7a;
+            box-shadow: inset 0 0 0 2px #a0ffff;
+            color: white;
+            font-weight: bold;
+        }
+
+        .ascii-col {
+            display: block;
+            width: 90px;
+            color: #b0c7e0;
+            letter-spacing: 0.3px;
+            flex-shrink: 0;
+            user-select: none;
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .progress-container {
+            width: 100%;
+            margin: 6px 0 2px;
+            background: white;
+            border-radius: 20px;
+            height: 6px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: #3aa87a;
+            transition: width 0.15s;
+        }
+
+		button {
+			background: none;
+			border: none;
+		}
+
+		.readme {
+			width: 100%;
+			border-top: 1px solid #1e2a35;
+            border-bottom: 1px solid #1e2a35;
+		}
+
+		h2 {
+			text-align: center;
+		}
+
+		.introduce {
+			margin-left: 20px;
+		}
+
+		.details{
+			text-align: left;
+			margin-left: 20px;
+		}
+
+        @media (max-width: 480px) {
+            .app { padding: 8px 0 12px; }
+            .offset { width: 60px; font-size: 10px; }
+            .hex-byte { width: 22px; font-size: 10px; }
+            .ascii-col { width: 70px; font-size: 10px; }
+        }
+
+        @media (min-width: 900px) {
+            .hex-viewport { height: 540px; }
+            .offset { width: 80px; font-size: 12px; }
+            .hex-byte { width: 28px; font-size: 12px; }
+            .ascii-col { width: 120px; font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <ul class="menuTop" id="menuTop">
+		<li>
+			<span id='modes'>html编辑器</span>
+            <div class="dropdown-content" id="modesDropdown">
+                <div class="dropdown-item">html编辑器</div>
+                <div class="dropdown-item">hex编辑器</div>
+			</div>
+		</li>
+        <li>
+			<span id="fileOpen">打开</span>
+			<input type="file" id="fileOpenpoint" style="display: none">
+			<input type="file" id="fileInput" style="display: none">
+		</li>
+        <li>
+			<span id='settings'>设置</span>
+            <div class="dropdown-content" id="settingsDropdown">
+                <div class="dropdown-item">开发中</div>
+                <div class="dropdown-item">开发中</div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-item" data-action="about">开发中</div>
+			</div>
+		</li>
+		<li>
+			<span id='about'>关于</span>
+		</li>
+        <li id="saveBtn">保存</li>
+    </ul>
+<div id='htmlC'>
+    <ul>
+        <li id="addcont">Tab</li>
+    </ul>
+    <textarea id="contents">
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>请输入文本</title>
+</head>
+<body>
+    
+</body>
+</html>
+    </textarea>
+    <ul>
+    	<li id="show">效果预览</li>
+        <li id="consoleFake">打开控制台</li> 
+	</ul>
+
+    <div id="showIntime"></div>
+
+    <div id="emptyBox" style="display: none;"></div>
+    <div id="consoleBuildin"  style="display: none;">
+        <div id="consoleBuildinDot"></div>
+        <div id="consoleContents">
+            <div class="consoleHeader">
+                <span>控制台</span>
+                <div id="clearConsole">清空</div>
+            </div>
+            <div id="logs"></div>
+        </div>
+    </div>
+</div>
+
+<div id='hexC' style="display: none">
+    <div class="toolbar">
+        
+    </div>
+    <div class="search-row">
+        <input type="text" id="searchInput" class="search-input" placeholder="搜索十六进制" spellcheck="false">
+        <button id="searchBtn">查找</button>
+        <button id="searchPrevBtn" disabled>◀ 上一个</button>
+        <button id="searchNextBtn" disabled>下一个 ▶</button>
+        <button id="searchClearBtn">清除</button>
+    </div>
+    <div id="progressWrapper" style="display:none;">
+      <div class="progress-container">
+            <div id="progressBar" class="progress-bar"></div>
+        </div>
+    </div>
+
+    <div class="viewport-wrapper">
+        <div id="hexViewport" class="hex-viewport"></div>
+    </div>
+
+    <div class="footer-note">
+		<div class="jump-container">
+			<span class="status" id="statusMsg">就绪</span>
+        	<span id="debugHint" style="font-size:0.7rem;opacity:0.7;"></span>
+			<span id="modCountDisplay" class="mod-badge">0</span>
+			<button id="applyBtn" class="primary">应用修改</button>
+        	<button id="cancelBtn" class="danger" style="display:none;">取消</button>
+			<div id="fileInfo">未选择文件</div>
+        </div>
+    </div>
+</div>
+
+<div id='aboutheTool' style="display: none">
+	<div class='readme'>
+		<h2>一个功能还算多的编辑器</h2>
+		<ol style='margin-top: 10px'>
+			<li>
+				<span style='font-weight: bold'>• 功能</span>
+				<div class='introduce' id='introduceHtml'>- html编辑器</div>
+				<div class='details' id='detailHtml'>html编辑器可以打开一些文本类型的小文件，它会根据不同文件类型展示不同结果。当你打开普通文本文件，它会直接显示；当你打开图片、视频等媒体文件，你可以在文本框中看到它的base64编码，点击效果预览可以看到这个文件(功能不全)；如果你打开html文件，它还提供效果预览和基础的控制台输出功能。你可以将修改好的内容保存为新的文件，注意，它在打开大文件的时候会卡，这里我没有做优化，如果要打开大文件，请用hex编辑器打开</div>
+				<div class='introduce' id='introduceHex'>- hex编辑器</div>
+				<div class='details' id='detailHex'>hex编辑器可以打开任意文件，包括特别特别大的文件。注意，当前版本为了性能，第一次查找时只会查找当前加载的块中符合的内容，不过点击上一个下一个时，如果到新的块，它会自动续上，因此当前版本如果要找文件结束标记，请先下滑到文件结尾处(以后会优化)。当你完成修改后，请先点击应用修改再点击保存。<div>
+			</li>
+			<li>
+				<span style='font-weight: bold'>• 修改记录</span>
+				<div class='introduce'>- 0.8版本添加关于工具的介绍(0.8之前不记得了)</div>
+			</li>
+			<li>
+				<span style='font-weight: bold'>• 关于这个工具</span>
+				<div class='introduce'>我在学习网络安全的时候需要用到一些工具，但是由于一些原因，我没办法用电脑，因此我直接用js来制作相关的功能。我遇到第一个问题就是手机上没办法预览html效果，而且报错也接收不到，于是就有了这个工具的雏形：html编辑器。后来我制作了有趣一个挑战：从一张图片里找到所有的图片(感兴趣的同学可以前往＊＊＊一探究竟)，这个挑战中会涉及到查看文件十六进制，其实现在有很多查看十六进制的工具，各平台都有，但是为了工具的完整性，我单独制作了一个十六进制编辑器，最后整合到了这里。没有使用第三方js库，没网也能用。大概就是这样(0.8版本)</div>
+			</li>
+			<li>
+				<span style='font-weight: bold'>• 关于作者</span>
+				<div class='introduce'>QQ 3286708221 脸接大招 </div>
+				<div class='introduce'>(有问题请发邮件)<div>
+			</li>
+		<ol>
+	<div>
+</div>
+    
+    <script>
+        var domshowIntime = document.getElementById("showIntime");
+        var domshow = document.getElementById("show");
+        var contents = document.getElementById("contents");
+        var saveBtn = document.getElementById("saveBtn");
+        var fileOpen = document.getElementById("fileOpen");
+        var fileOpenpoint = document.getElementById("fileOpenpoint");
+        var addcont = document.getElementById("addcont");
+        var consoleFakeBtn = document.getElementById("consoleFake");
+        var consoleBuildin = document.getElementById("consoleBuildin");
+        var dot = document.getElementById("consoleBuildinDot");
+        var emptyBox = document.getElementById("emptyBox");
+        var consoleContents = document.getElementById("consoleContents");
+        var clearConsole = document.getElementById("clearConsole");
+        var logs = document.getElementById("logs");
+		
+		var modes = document.getElementById("modes");
+		var settings = document.getElementById("settings");
+		var modesDropdown = document.getElementById("modesDropdown");
+		var settingsDropdown = document.getElementById("settingsDropdown");
+		var fileOpenhex = document.getElementById("fileOpenhex");
+		var menuTopx = document.getElementById("menuTop");
+		var htmlC = document.getElementById("htmlC");
+		var about = document.getElementById("about");
+		var aboutheTool = document.getElementById("aboutheTool");
+
+        // 控件
+        // 控制台
+        var isDragging = false;
+        var startY = 0;
+        var startHeight = 0;
+
+        var mode = 'html';
+
+        // 预览
+        function show() {
+            var content = contents.value;
+            domshowIntime.innerHTML = "";
+            
+            var iframe = document.createElement("iframe");
+            iframe.style.width = "100%";
+            iframe.style.height = "300px";
+            iframe.style.border = "1px solid #ccc";
+            iframe.srcdoc = content;
+            
+            domshowIntime.appendChild(iframe);
+
+            // 获取当前时间
+            var date = new Date().toLocaleTimeString();
+
+
+            // 监听iframe中的console.log以及报错信息
+            iframe.contentWindow.console.log = function(...args) {
+                var logEntry = document.createElement("div");
+                logEntry.textContent = `[${date}] ${args.join(" ")}`;
+                logs.appendChild(logEntry);
+            };
+            iframe.contentWindow.onerror = function(message, source, lineno, colno, error) {
+                var errorEntry = document.createElement("div");
+                errorEntry.textContent = `[${date}] Error: ${message} at ${source}:${lineno}:${colno}`;
+                errorEntry.style.color = "red";
+                logs.appendChild(errorEntry);
+            };   
+        }
+        
+        // 保存为文件
+        function saveFile() {
+            var content = contents.value;
+            
+            var blob = new Blob([content], { type: 'text/html' });
+            
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            
+            var timestamp = new Date().getTime();
+            var filename = 'html_preview_' + timestamp + '.html';
+            a.download = filename;
+            
+            document.body.appendChild(a);
+            a.click();
+            
+            setTimeout(function() {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 0);
+        }
+        
+        // 打开文件
+        function fileShow() {
+        	contents.value = "";
+        	var file = event.target.files[0];
+        	var reader = new FileReader();
+        	reader.onload = function(e) {
+            	contents.value = e.target.result;
+			};
+             
+            //contents.value = file.type;
+        	    
+        	if (file.type.startsWith('text') || file.type === '') {
+            	reader.readAsText(file, 'utf-8');
+            } else if (file.type.startsWith('image')) {
+            	reader.readAsDataURL(file);
+            	reader.onload = function(e) {
+            		contents.value = `<img src="${e.target.result}" alt="${file.name}">`;
+            	};
+             //[application,audio,video]
+            } else if (file.type.startsWith('audio')) {
+            	reader.readAsDataURL(file);
+            	reader.onload = function(e) {
+                	contents.value = `<audio src="${e.target.result}" alt="${file.name}">`;
+                };
+            } else if (file.type.split('/')[1] == "json") {
+				reader.readAsText(file, 'utf-8'); 
+			} else {
+            	//reader.readAsArrayBuffer(file);
+				reader.readAsDataURL(file);
+				reader.onload = function(e) {
+					contents.value = `<div>"${file.type}"</div>`;
+				}
+				
+                // contents.value = file.type;
+                contents.style.color = '#888';
+            }
+		}
+        	
+		// 快速输入
+        function Addcont() {
+        	var textGet = addcont.innerHTML;
+        	if (textGet == "Tab") {
+        		text = "\t";
+        	}
+        	var cursorPosition = contents.selectionStart;
+        	var textBeforeCursor = contents.value.substring(0, cursorPosition);
+        	var textAfterCursor = contents.value.substring(cursorPosition);
+        	contents.value = textBeforeCursor + text + textAfterCursor;
+        	contents.selectionStart = contents.selectionEnd = cursorPosition + text.length;
+        	contents.focus();
+        }
+
+        // 控制台开关
+        function consoleFake() {
+            if (consoleFakeBtn.innerHTML == "打开控制台") {
+                consoleBuildin.style.display = "flex";
+                emptyBox.style.display = "block";
+                consoleFakeBtn.innerHTML = "关闭控制台";
+            } else {
+                consoleBuildin.style.display = "none";
+                emptyBox.style.display = "none";
+                consoleFakeBtn.innerHTML = "打开控制台";
+            }       
+        }
+
+		// 拖动完善
+        function startDrag(e) {
+            isDragging = true;
+            startY = e.clientY;
+            startHeight = consoleBuildin.offsetHeight;
+            document.body.style.cursor = "ns-resize";
+            
+            // 添加鼠标移动/触摸移动监听
+            document.addEventListener("mousemove", handleDrag);
+            document.addEventListener("touchmove", handleTouchMove, { passive: false });
+            
+            // 添加鼠标释放/触摸结束监听
+            document.addEventListener("mouseup", stopDrag);
+            document.addEventListener("touchend", stopDrag);
+        }
+        
+        function handleDrag(e) {
+            if (isDragging) {
+                var deltaY = e.clientY - startY;
+                updateConsoleHeight(deltaY);
+            }
+        }
+        
+        function handleTouchMove(e) {
+            if (isDragging) {
+                e.preventDefault(); // 防止滚动
+                var deltaY = e.touches[0].clientY - startY;
+                updateConsoleHeight(deltaY);
+            }
+        }
+        
+        function updateConsoleHeight(deltaY) {
+            var newHeight = startHeight - deltaY;
+            consoleBuildin.style.height = newHeight + "px";
+            emptyBox.style.height = newHeight + "px";
+        }
+        
+        function stopDrag() {
+            isDragging = false;
+            document.body.style.cursor = "default";
+            
+            // 移除事件监听
+            document.removeEventListener("mousemove", handleDrag);
+            document.removeEventListener("touchmove", handleTouchMove);
+            document.removeEventListener("mouseup", stopDrag);
+            document.removeEventListener("touchend", stopDrag);
+        }
+
+        // 点击页面其他位置关闭下拉
+        function onDocumentClick(e) {
+            // 如果点击的元素在settingsMenu内部，不做关闭
+            if (menuTop.contains(e.target)) {
+                return;
+            } else {
+                modesDropdown.style.display = 'none';
+				settingsDropdown.style.display = 'none';
+			}
+        }
+
+		function modeChange(x) {
+			if (x == 0) {
+				modes.textContent = 'html编辑器';
+				htmlC.style.display = 'block';
+				hexC.style.display = 'none';
+				aboutheTool.style.display = 'none',
+				mode = 'html';
+				modesDropdown.style.display = 'none';
+			}else if (x == 1) {
+				modes.textContent = 'hex编辑器';
+				htmlC.style.display = 'none';
+				hexC.style.display = 'block';
+				aboutheTool.style.display = 'none';
+				mode = 'hex';
+				modesDropdown.style.display = 'none';
+			}else if (x == 2) {
+				htmlC.style.display = 'none';
+				hexC.style.display = 'none';
+				aboutheTool.style.display = 'block';
+				modesDropdown.style.display = 'none';
+				settingsDropdown.style.display = 'none';
+			}
+		}
+
+        domshow.addEventListener("click", show);
+        saveBtn.addEventListener("click", function() {
+			if (mode === 'html') {
+				saveFile();
+			}else if (mode === 'hex') {
+				hexEditor.downloadFile();
+			}
+		});
+
+        fileOpen.addEventListener("click", function() {
+			if (mode === 'html') {
+				fileOpenpoint.click();
+			}else if (mode === 'hex') {
+				hexEditor.fileInput.click();
+			}		
+		});
+        fileOpenpoint.addEventListener("change", fileShow);
+        addcont.addEventListener("click", Addcont);
+        consoleFakeBtn.addEventListener("click", consoleFake);
+
+        // 控制台拖动 - 鼠标事件（桌面端）
+        dot.addEventListener("mousedown", startDrag);
+        
+        // 控制台拖动 - 触摸事件（移动端）
+        dot.addEventListener("touchstart", function(e) {
+            e.preventDefault(); // 防止滚动
+            startDrag(e.touches[0]); // 使用第一个触摸点
+        }, { passive: false });
+        
+ 
+        clearConsole.addEventListener("click", function() {
+            logs.innerHTML = '';
+        });
+
+		modes.addEventListener("click", function() {
+			if (modesDropdown.style.display === 'none') {
+            	modesDropdown.style.display = 'block';
+			}else{
+				modesDropdown.style.display = 'none';
+			}
+        });
+
+		settings.addEventListener("click", function() {
+			if (settingsDropdown.style.display === 'none') {
+            	settingsDropdown.style.display = 'block';
+			}else{
+				settingsDropdown.style.display = 'none';
+			}
+        });
+
+		settingsDropdown.addEventListener('click', function(e) {
+			const dropdownElement = e.target.closest('.dropdown-item');
+			const allElements = Array.from(document.querySelectorAll('.dropdown-item'));
+			const index = allElements.indexOf(dropdownElement);
+			if (index === 0) {
+			}
+		});
+
+		modesDropdown.addEventListener('click', function(e) {
+			const dropdownElement = e.target.closest('.dropdown-item');
+			const allElements = Array.from(document.querySelectorAll('.dropdown-item'));
+			const index = allElements.indexOf(dropdownElement);
+			modeChange(index);
+		});
+
+		about.addEventListener('click', function() {
+			if (aboutheTool.style.display === 'none') {
+				modeChange(2);
+			}else {
+				if (modes.textContent === 'html编辑器') {
+					modeChange(0);
+				}else if (modes.textContent === 'hex编辑器') {
+					modeChange(1);
+				}
+			}
+		});
+
+		document.addEventListener('click', onDocumentClick);
+		
+
+    </script>
+<script id="workerScript" type="text/worker">
+    self.onmessage = async function(e) {
+        const { file, startChunk, endChunk, chunkSize, modifications, fileSize } = e.data;
+        const totalChunksAssigned = endChunk - startChunk;
+        const results = [];
+        
+        try {
+            for (let chunkIdx = startChunk; chunkIdx < endChunk; chunkIdx++) {
+                const start = chunkIdx * chunkSize;
+                const end = Math.min(start + chunkSize, fileSize);
+                const buffer = await file.slice(start, end).arrayBuffer();
+                const rawBytes = new Uint8Array(buffer);
+                const modifiedBytes = new Uint8Array(rawBytes.length);
+                
+                for (let i = 0; i < rawBytes.length; i++) {
+                    const globalOffset = start + i;
+                    modifiedBytes[i] = modifications.has(globalOffset) ? modifications.get(globalOffset) : rawBytes[i];
+                }
+                
+                results.push({
+                    chunkIdx: chunkIdx,
+                    buffer: modifiedBytes.buffer
+                });
+                
+                const progress = (chunkIdx - startChunk + 1) / totalChunksAssigned;
+                self.postMessage({ type: 'progress', progress: progress, workerId: startChunk });
+            }
+            
+            self.postMessage({ 
+                type: 'result', 
+                results: results,
+                workerId: startChunk 
+            }, results.map(r => r.buffer));
+        } catch (err) {
+            self.postMessage({ type: 'error', error: err.message, workerId: startChunk });
+        }
+    };
+</script>
+
+<script>
+    (function(){
+        "use strict";
+        const CHUNK_SIZE = 4096; 
+        const BYTES_PER_ROW = 8;
+        const PRELOAD_RANGE = 2;
+        const ROW_HEIGHT = 22;
+        const ROWS_PER_CHUNK = Math.ceil(CHUNK_SIZE / BYTES_PER_ROW);
+        const CHUNK_FIXED_HEIGHT = ROWS_PER_CHUNK * ROW_HEIGHT + 4;
+
+        const WORKER_COUNT = navigator.hardwareConcurrency || 4;
+
+        // DOM 元素
+        const fileInput = document.getElementById('fileInput');
+        const viewport = document.getElementById('hexViewport');
+        const applyBtn = document.getElementById('applyBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const modCountDisplay = document.getElementById('modCountDisplay');
+        const statusMsg = document.getElementById('statusMsg');
+        const debugHint = document.getElementById('debugHint');
+        const progressWrapper = document.getElementById('progressWrapper');
+        const progressBar = document.getElementById('progressBar');
+        const searchInput = document.getElementById('searchInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const searchPrevBtn = document.getElementById('searchPrevBtn');
+        const searchNextBtn = document.getElementById('searchNextBtn');
+        const searchClearBtn = document.getElementById('searchClearBtn');
+        const fileInfo = document.getElementById('fileInfo');
+
+        let currentFile = null;
+        let fileSize = 0;
+        let totalChunks = 0;
+        
+        const modifications = new Map();
+        let renderedChunkIndexes = new Set();
+        
+        let isEditing = false;
+        let currentEditInput = null;
+        
+        let pendingRefresh = null;
+        let isRefreshing = false;
+        
+        const chunkDataCache = new Map();
+        
+        let spacerDiv = null;
+        let chunksContainer = null;
+
+        // 应用处理相关
+        let isApplying = false;
+        let abortController = null;
+        let workers = [];
+        let generatedBlob = null;
+        let generatedBlobUrl = null;
+
+        // 搜索高亮
+        let searchMatches = [];
+        let currentMatchIndex = -1;
+
+        const workerBlob = new Blob([document.getElementById('workerScript').textContent], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(workerBlob);
+
+
+        function formatOffset(offset) {
+            return offset.toString(16).toUpperCase().padStart(8, '0');
+        }
+
+        function updateModBadge() {
+            const count = modifications.size;
+            modCountDisplay.textContent = `${count}`;
+            applyBtn.disabled = (count === 0 || !currentFile || isApplying);
+        }
+
+        function setStatus(text, isError = false) {
+            statusMsg.textContent = text;
+            statusMsg.style.color = isError ? '#f99' : '#aaccdd';
+        }
+
+        function setProcessingMode(processing) {
+            isApplying = processing;
+            if (processing) {
+                viewport.classList.add('processing');
+                applyBtn.style.display = 'none';
+                cancelBtn.style.display = 'inline-block';
+                fileInput.disabled = true;
+                progressWrapper.style.display = 'block';
+                progressBar.style.width = '0%';
+                if (isEditing && currentEditInput) currentEditInput.blur();
+            } else {
+                viewport.classList.remove('processing');
+                applyBtn.style.display = 'inline-block';
+                cancelBtn.style.display = 'none';
+                fileInput.disabled = false;
+                progressWrapper.style.display = 'none';
+                progressBar.style.width = '0%';
+                updateModBadge();
+            }
+        }
+
+        function readChunkForRender(file, chunkIndex) {
+            const start = chunkIndex * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, file.size);
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(reader.error);
+                reader.readAsArrayBuffer(file.slice(start, end));
+            });
+        }
+
+        function initViewportStructure() {
+            viewport.innerHTML = '';
+            spacerDiv = document.createElement('div');
+            spacerDiv.className = 'scroll-spacer';
+            spacerDiv.style.height = '0px';
+            
+            chunksContainer = document.createElement('div');
+            chunksContainer.style.position = 'relative';
+            chunksContainer.style.width = '100%';
+            
+            spacerDiv.appendChild(chunksContainer);
+            viewport.appendChild(spacerDiv);
+        }
+
+        function updateTotalHeight() {
+            if (spacerDiv) {
+                spacerDiv.style.height = (totalChunks * CHUNK_FIXED_HEIGHT) + 'px';
+            }
+        }
+
+        function clearSearchHighlights() {
+            document.querySelectorAll('.hex-byte.search-highlight, .hex-byte.search-highlight-current').forEach(el => {
+                el.classList.remove('search-highlight', 'search-highlight-current');
+            });
+        }
+
+        async function renderChunk(containerDiv, chunkIndex) {
+            if (!currentFile) return;
+            
+            const startOffset = chunkIndex * CHUNK_SIZE;
+            const chunkSizeActual = Math.min(CHUNK_SIZE, fileSize - startOffset);
+            if (chunkSizeActual <= 0) return;
+
+            let rawBytes;
+            if (chunkDataCache.has(chunkIndex)) {
+                rawBytes = chunkDataCache.get(chunkIndex);
+            } else {
+                const buffer = await readChunkForRender(currentFile, chunkIndex);
+                rawBytes = new Uint8Array(buffer);
+                if (renderedChunkIndexes.has(chunkIndex)) {
+                    chunkDataCache.set(chunkIndex, rawBytes);
+                }
+            }
+
+            const displayBytes = new Uint8Array(rawBytes.length);
+            for (let i = 0; i < rawBytes.length; i++) {
+                const globalOffset = startOffset + i;
+                displayBytes[i] = modifications.has(globalOffset) ? modifications.get(globalOffset) : rawBytes[i];
+            }
+
+            const rows = [];
+            const numRows = Math.ceil(displayBytes.length / BYTES_PER_ROW);
+            
+            for (let r = 0; r < numRows; r++) {
+                const rowStart = r * BYTES_PER_ROW;
+                const rowEnd = Math.min(rowStart + BYTES_PER_ROW, displayBytes.length);
+                const rowOffset = startOffset + rowStart;
+                
+                let offsetHtml = `<span class="offset">${formatOffset(rowOffset)}</span>`;
+                
+                let hexHtml = '<span class="hex-bytes">';
+                for (let i = rowStart; i < rowEnd; i++) {
+                    const byteVal = displayBytes[i];
+                    const globalOff = startOffset + i;
+                    const hexStr = byteVal.toString(16).toUpperCase().padStart(2, '0');
+                    const modifiedClass = modifications.has(globalOff) ? 'modified' : '';
+                    hexHtml += `<span class="hex-byte ${modifiedClass}" data-offset="${globalOff}">${hexStr}</span>`;
+                }
+                hexHtml += '</span>';
+                
+                let asciiHtml = '<span class="ascii-col">';
+                for (let i = rowStart; i < rowEnd; i++) {
+                    const byteVal = displayBytes[i];
+                    const char = (byteVal >= 32 && byteVal <= 126) ? String.fromCharCode(byteVal) : '.';
+                    asciiHtml += `<span class="ascii-char">${char}</span>`;
+                }
+                asciiHtml += '</span>';
+                
+                rows.push(`<div class="hex-row">${offsetHtml}${hexHtml}${asciiHtml}</div>`);
+            }
+            
+            containerDiv.innerHTML = rows.join('');
+            containerDiv.dataset.chunkIndex = chunkIndex;
+            containerDiv.style.top = (chunkIndex * CHUNK_FIXED_HEIGHT) + 'px';
+            
+            if (!chunkDataCache.has(chunkIndex)) {
+                chunkDataCache.set(chunkIndex, rawBytes);
+            }
+        }
+
+        // 确保指定 chunk 已渲染
+        async function ensureChunkRendered(chunkIdx) {
+            if (!currentFile) return;
+            if (chunkIdx < 0 || chunkIdx >= totalChunks) return;
+            if (renderedChunkIndexes.has(chunkIdx)) return;
+            
+            const newDiv = document.createElement('div');
+            newDiv.className = 'chunk';
+            newDiv.dataset.chunkIndex = chunkIdx;
+            chunksContainer.appendChild(newDiv);
+            renderedChunkIndexes.add(chunkIdx);
+            await renderChunk(newDiv, chunkIdx);
+        }
+
+        function getVisibleChunkIndices() {
+            if (!currentFile || totalChunks === 0) return [];
+            const scrollTop = viewport.scrollTop;
+            const viewportHeight = viewport.clientHeight;
+            
+            let firstVisible = Math.floor(scrollTop / CHUNK_FIXED_HEIGHT);
+            firstVisible = Math.max(0, Math.min(firstVisible, totalChunks - 1));
+            
+            let lastVisible = Math.ceil((scrollTop + viewportHeight) / CHUNK_FIXED_HEIGHT);
+            lastVisible = Math.max(0, Math.min(lastVisible, totalChunks - 1));
+            
+            const indices = new Set();
+            for (let i = firstVisible - PRELOAD_RANGE; i <= lastVisible + PRELOAD_RANGE; i++) {
+                if (i >= 0 && i < totalChunks) indices.add(i);
+            }
+            
+            if (totalChunks <= (PRELOAD_RANGE * 2 + 3)) {
+                for (let i = 0; i < totalChunks; i++) indices.add(i);
+            }
+            
+            const sorted = Array.from(indices).sort((a,b) => a - b);
+            if (sorted.length > 0) {
+                debugHint.textContent = `块 ${sorted[0]}~${sorted[sorted.length-1]} (共${totalChunks})`;
+            }
+            return sorted;
+        }
+
+        async function refreshVisibleChunks() {
+            if (!currentFile || isEditing || !chunksContainer || isApplying) return;
+            if (isRefreshing) return;
+            
+            isRefreshing = true;
+            
+            try {
+                const targetIndices = getVisibleChunkIndices();
+                const targetSet = new Set(targetIndices);
+                
+                const existingChunks = Array.from(chunksContainer.querySelectorAll('.chunk'));
+                const existingMap = new Map();
+                existingChunks.forEach(div => {
+                    const idx = parseInt(div.dataset.chunkIndex);
+                    if (!isNaN(idx)) existingMap.set(idx, div);
+                });
+                
+                for (let [idx, div] of existingMap.entries()) {
+                    if (!targetSet.has(idx)) {
+                        div.remove();
+                        renderedChunkIndexes.delete(idx);
+                        chunkDataCache.delete(idx);
+                    }
+                }
+                
+                for (let idx of targetIndices) {
+                    await ensureChunkRendered(idx);
+                }
+                
+                for (let [cachedIdx, _] of chunkDataCache) {
+                    if (!renderedChunkIndexes.has(cachedIdx)) {
+                        chunkDataCache.delete(cachedIdx);
+                    }
+                }
+            } catch (e) {
+                console.warn('刷新块失败', e);
+            } finally {
+                isRefreshing = false;
+            }
+        }
+
+        function scheduleRefresh() {
+            if (pendingRefresh) cancelAnimationFrame(pendingRefresh);
+            pendingRefresh = requestAnimationFrame(async () => {
+                await refreshVisibleChunks();
+                pendingRefresh = null;
+            });
+        }
+
+        function onViewportScroll() {
+            if (!currentFile || isApplying) return;
+            scheduleRefresh();
+        }
+
+        function jumpToOffset(hexStr) {
+            if (!currentFile) return;
+            let offset = parseInt(hexStr, 16);
+            if (isNaN(offset)) {
+                setStatus('无效的十六进制偏移', true);
+                return;
+            }
+            offset = Math.max(0, Math.min(offset, fileSize - 1));
+            const chunkIdx = Math.floor(offset / CHUNK_SIZE);
+            const scrollTop = chunkIdx * CHUNK_FIXED_HEIGHT;
+            viewport.scrollTop = scrollTop;
+            setStatus(`跳转到 0x${offset.toString(16).toUpperCase()}`);
+        }
+
+        // 搜索导航
+        function performSearch() {
+            clearSearchHighlights();
+            const query = searchInput.value.trim();
+            if (!query || !currentFile) {
+                searchMatches = [];
+                currentMatchIndex = -1;
+                updateNavButtons();
+                return;
+            }
+            
+            const hexPattern = /^[0-9A-Fa-f\s]+$/;
+            let searchBytes = [];
+            if (hexPattern.test(query)) {
+                const hex = query.replace(/\s+/g, '');
+                if (hex.length % 2 !== 0) {
+                    setStatus('十六进制长度必须为偶数', true);
+                    return;
+                }
+                for (let i = 0; i < hex.length; i+=2) {
+                    searchBytes.push(parseInt(hex.substr(i,2), 16));
+                }
+            } else {
+                for (let i = 0; i < query.length; i++) {
+                    searchBytes.push(query.charCodeAt(i));
+                }
+            }
+            
+            const matches = [];
+            for (let [chunkIdx, bytes] of chunkDataCache.entries()) {
+                const startOffset = chunkIdx * CHUNK_SIZE;
+                const searchIn = new Uint8Array(bytes.length);
+                for (let i = 0; i < bytes.length; i++) {
+                    searchIn[i] = modifications.has(startOffset + i) ? modifications.get(startOffset + i) : bytes[i];
+                }
+                for (let i = 0; i <= searchIn.length - searchBytes.length; i++) {
+                    let match = true;
+                    for (let j = 0; j < searchBytes.length; j++) {
+                        if (searchIn[i+j] !== searchBytes[j]) {
+                            match = false;
+                            break;
+                        }
+                    }
+                    if (match) {
+                        matches.push(startOffset + i);
+                    }
+                }
+            }
+            
+            searchMatches = matches;
+            if (matches.length > 0) {
+                currentMatchIndex = 0;
+                navigateToMatchAtIndex(0);
+            } else {
+                currentMatchIndex = -1;
+                setStatus('未找到匹配项');
+                clearSearchHighlights();
+            }
+            updateNavButtons();
+        }
+
+        // 导航到指定索引的匹配项（核心）
+        async function navigateToMatchAtIndex(index) {
+            if (!searchMatches.length || index < 0 || index >= searchMatches.length) return;
+            currentMatchIndex = index;
+            const offset = searchMatches[currentMatchIndex];
+            const chunkIdx = Math.floor(offset / CHUNK_SIZE);
+            
+            
+            await ensureChunkRendered(chunkIdx);
+            
+            const scrollTop = chunkIdx * CHUNK_FIXED_HEIGHT;
+            viewport.scrollTop = scrollTop;
+            await new Promise(resolve => setTimeout(resolve, 20));
+            highlightCurrentMatch();
+            const targetElement = document.querySelector(`.hex-byte[data-offset="${offset}"]`);
+            if (targetElement) {
+                targetElement.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            }
+            
+            setStatus(`匹配 ${currentMatchIndex+1}/${searchMatches.length} 位于 0x${offset.toString(16).toUpperCase()}`);
+            updateNavButtons();
+        }
+
+        function navigateMatch(delta) {
+            if (!searchMatches.length) return;
+            const newIndex = (currentMatchIndex + delta + searchMatches.length) % searchMatches.length;
+            navigateToMatchAtIndex(newIndex);
+        }
+
+        function highlightCurrentMatch() {
+            clearSearchHighlights();
+            searchMatches.forEach(off => {
+                document.querySelectorAll(`.hex-byte[data-offset="${off}"]`).forEach(el => {
+                    el.classList.add('search-highlight');
+                });
+            });
+            if (currentMatchIndex >= 0 && currentMatchIndex < searchMatches.length) {
+                const currentOff = searchMatches[currentMatchIndex];
+                document.querySelectorAll(`.hex-byte[data-offset="${currentOff}"]`).forEach(el => {
+                    el.classList.add('search-highlight-current');
+                });
+            }
+        }
+
+        function updateNavButtons() {
+            const hasMatches = searchMatches.length > 0;
+            searchPrevBtn.disabled = !hasMatches;
+            searchNextBtn.disabled = !hasMatches;
+        }
+
+        // 多线程修改
+        function terminateWorkers() {
+            workers.forEach(w => w.terminate());
+            workers = [];
+        }
+
+        async function startApply() {
+            if (!currentFile || modifications.size === 0) {
+                setStatus('没有修改需要应用', true);
+                return;
+            }
+            if (isApplying) return;
+            
+            if (generatedBlobUrl) {
+                URL.revokeObjectURL(generatedBlobUrl);
+                generatedBlobUrl = null;
+            }
+            generatedBlob = null;
+            terminateWorkers();
+            
+            setProcessingMode(true);
+            setStatus(`正在使用 ${WORKER_COUNT} 个线程处理...`);
+            
+            abortController = new AbortController();
+            const signal = abortController.signal;
+            
+            const modsArray = Array.from(modifications.entries());
+            
+            const chunksPerWorker = Math.ceil(totalChunks / WORKER_COUNT);
+            const progressMap = new Map();
+            const resultsByChunk = new Map();
+            
+            let completedWorkers = 0;
+            let hasError = false;
+            
+            const updateOverallProgress = () => {
+                if (progressMap.size === 0) return;
+                let total = 0;
+                for (let p of progressMap.values()) total += p;
+                const overall = (total / workers.length) * 100;
+                progressBar.style.width = overall + '%';
+            };
+            
+            try {
+                for (let i = 0; i < WORKER_COUNT; i++) {
+                    const startChunk = i * chunksPerWorker;
+                    const endChunk = Math.min(startChunk + chunksPerWorker, totalChunks);
+                    if (startChunk >= endChunk) continue;
+                    
+                    const worker = new Worker(workerUrl);
+                    workers.push(worker);
+                    const workerId = i;
+                    progressMap.set(workerId, 0);
+                    
+                    worker.onmessage = (e) => {
+                        if (signal.aborted) return;
+                        const { type, progress, results, error, workerId: wId } = e.data;
+                        
+                        if (type === 'progress') {
+                            progressMap.set(wId, progress);
+                            updateOverallProgress();
+                        } else if (type === 'result') {
+                            results.forEach(r => resultsByChunk.set(r.chunkIdx, r.buffer));
+                            completedWorkers++;
+                            progressMap.set(wId, 1);
+                            updateOverallProgress();
+                            
+                            if (completedWorkers === workers.length) {
+                                finalizeApply();
+                            }
+                        } else if (type === 'error') {
+                            hasError = true;
+                            setStatus(`Worker 错误: ${error}`, true);
+                            cancelApply();
+                        }
+                    };
+                    
+                    worker.onerror = (err) => {
+                        hasError = true;
+                        setStatus(`Worker 异常: ${err.message}`, true);
+                        cancelApply();
+                    };
+                    
+                    worker.postMessage({
+                        file: currentFile,
+                        startChunk,
+                        endChunk,
+                        chunkSize: CHUNK_SIZE,
+                        modifications: new Map(modsArray),
+                        fileSize: fileSize
+                    });
+                }
+                
+                if (workers.length === 0) {
+                    finalizeApply();
+                }
+            } catch (e) {
+                setStatus(`启动处理失败: ${e.message}`, true);
+                setProcessingMode(false);
+            }
+            
+            function finalizeApply() {
+                if (signal.aborted || hasError) return;
+                if (resultsByChunk.size !== totalChunks) {
+                    setStatus(`错误：数据不完整 (${resultsByChunk.size}/${totalChunks})`, true);
+                    setProcessingMode(false);
+                    return;
+                }
+                
+                setStatus('正在合并结果...');
+                const sortedBuffers = [];
+                for (let i = 0; i < totalChunks; i++) {
+                    sortedBuffers.push(resultsByChunk.get(i));
+                }
+                
+                try {
+                    generatedBlob = new Blob(sortedBuffers, { type: 'application/octet-stream' });
+                    generatedBlobUrl = URL.createObjectURL(generatedBlob);
+                    setStatus(`应用完成，${modifications.size} 处修改已处理，可点击保存`);
+                } catch (e) {
+                    setStatus(`生成文件失败: ${e.message}`, true);
+                } finally {
+                    terminateWorkers();
+                    setProcessingMode(false);
+                    updateModBadge();
+                }
+            }
+        }
+
+        function cancelApply() {
+            if (abortController) {
+                abortController.abort();
+                abortController = null;
+            }
+            terminateWorkers();
+            setStatus('应用已取消');
+            setProcessingMode(false);
+            progressBar.style.width = '0%';
+        }
+
+        function downloadFile() {
+            if (!generatedBlob || !generatedBlobUrl) {
+                setStatus('请先应用修改', true);
+                return;
+            }
+            if (!currentFile) return;
+            
+            const a = document.createElement('a');
+            a.href = generatedBlobUrl;
+            a.download = currentFile.name + (modifications.size > 0 ? '.modified' : '');
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => document.body.removeChild(a), 100);
+            setStatus(`文件已保存`);
+        }
+
+        // 加载文件
+        async function loadFile(file) {
+            if (isEditing && currentEditInput) {
+                currentEditInput.blur();
+                isEditing = false;
+                currentEditInput = null;
+            }
+            if (pendingRefresh) cancelAnimationFrame(pendingRefresh);
+            isRefreshing = false;
+            
+            if (isApplying) {
+                cancelApply();
+                setProcessingMode(false);
+            }
+            terminateWorkers();
+            if (generatedBlobUrl) {
+                URL.revokeObjectURL(generatedBlobUrl);
+                generatedBlobUrl = null;
+            }
+            generatedBlob = null;
+            
+            currentFile = file;
+            fileSize = file.size;
+            totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
+            
+            modifications.clear();
+            chunkDataCache.clear();
+            renderedChunkIndexes.clear();
+            updateModBadge();
+            clearSearchHighlights();
+            searchMatches = [];
+            currentMatchIndex = -1;
+            updateNavButtons();
+            
+            initViewportStructure();
+            updateTotalHeight();
+            viewport.scrollTop = 0;
+            
+            const sizeStr = fileSize < 1024 ? `${fileSize} B` : 
+                           (fileSize < 1024*1024 ? `${(fileSize/1024).toFixed(2)} KB` : `${(fileSize/(1024*1024)).toFixed(2)} MB`);
+            fileInfo.innerHTML = `<strong>${file.name}</strong> · ${sizeStr}`;
+            if (fileSize === 0) {
+                viewport.innerHTML = '<div style="padding:20px;text-align:center">空文件</div>';
+                applyBtn.disabled = true;
+                setStatus('文件为空');
+                debugHint.textContent = '';
+                return;
+            }
+            
+            setStatus('加载中…');
+            try {
+                await refreshVisibleChunks();
+                setStatus(`已加载，可编辑`);
+                applyBtn.disabled = (modifications.size === 0);
+            } catch (e) {
+                setStatus(`加载失败: ${e.message}`, true);
+            }
+        }
+
+        // 编辑逻辑
+        function startEdit(byteElement) {
+            if (!currentFile || isApplying) {
+                setStatus(isApplying ? '正在处理，请稍后' : '请先选择文件', true);
+                return;
+            }
+            if (isEditing) {
+                if (currentEditInput) currentEditInput.blur();
+            }
+            
+            const offset = parseInt(byteElement.dataset.offset);
+            if (isNaN(offset)) return;
+            
+            const currentHex = byteElement.textContent;
+            const parent = byteElement.parentNode;
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'hex-input';
+            input.value = currentHex;
+            input.maxLength = 2;
+            input.spellcheck = false;
+            input.inputMode = 'numeric';
+            
+            byteElement.style.display = 'none';
+            parent.insertBefore(input, byteElement);
+            
+            isEditing = true;
+            currentEditInput = input;
+            
+            input.focus();
+            input.select();
+            
+            const finishEdit = (commit = true) => {
+                if (!isEditing) return;
+                const newValue = input.value.trim().toUpperCase();
+                const hiddenSpan = byteElement;
+                
+                input.remove();
+                hiddenSpan.style.display = '';
+                
+                if (commit && newValue) {
+                    if (/^[0-9A-F]{1,2}$/.test(newValue)) {
+                        const byteVal = parseInt(newValue, 16);
+                        modifications.set(offset, byteVal);
+                        
+                        const chunkDiv = byteElement.closest('.chunk');
+                        if (chunkDiv) {
+                            const chunkIdx = parseInt(chunkDiv.dataset.chunkIndex);
+                            renderChunk(chunkDiv, chunkIdx).then(() => {
+                                const newByteEl = chunkDiv.querySelector(`.hex-byte[data-offset="${offset}"]`);
+                                if (newByteEl) newByteEl.classList.add('modified');
+                                if (searchMatches.length) highlightCurrentMatch();
+                            });
+                        }
+                        
+                        updateModBadge();
+                        setStatus(`偏移 0x${offset.toString(16).toUpperCase()} → ${newValue}`);
+                        
+                        if (generatedBlob) {
+                            generatedBlob = null;
+                            if (generatedBlobUrl) {
+                                URL.revokeObjectURL(generatedBlobUrl);
+                                generatedBlobUrl = null;
+                            }
+                        }
+                    } else {
+                        setStatus('无效十六进制', true);
+                    }
+                }
+                
+                isEditing = false;
+                currentEditInput = null;
+            };
+            
+            input.addEventListener('blur', () => finishEdit(true));
+            input.addEventListener('keydown', (ke) => {
+                if (ke.key === 'Enter') {
+                    ke.preventDefault();
+                    finishEdit(true);
+                } else if (ke.key === 'Escape') {
+                    ke.preventDefault();
+                    finishEdit(false);
+                }
+            });
+        }
+
+        // 事件绑定
+        viewport.addEventListener('dblclick', (e) => {
+            const target = e.target.closest('.hex-byte');
+            if (!target) return;
+            e.preventDefault();
+            startEdit(target);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = fileInput.files[0];
+            if (file) loadFile(file);
+            fileInput.value = '';
+        });
+        
+        viewport.addEventListener('scroll', onViewportScroll);
+        window.addEventListener('resize', () => {
+            if (currentFile && !isApplying) {
+                updateTotalHeight();
+                scheduleRefresh();
+            }
+        });
+        
+        applyBtn.addEventListener('click', startApply);
+        cancelBtn.addEventListener('click', cancelApply);
+        
+        searchBtn.addEventListener('click', performSearch);
+        searchPrevBtn.addEventListener('click', () => navigateMatch(-1));
+        searchNextBtn.addEventListener('click', () => navigateMatch(1));
+        searchClearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearchHighlights();
+            searchMatches = [];
+            currentMatchIndex = -1;
+            updateNavButtons();
+            setStatus('搜索已清除');
+        });
+        searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') performSearch(); });
+        
+        window.addEventListener('beforeunload', () => {
+            URL.revokeObjectURL(workerUrl);
+            if (generatedBlobUrl) URL.revokeObjectURL(generatedBlobUrl);
+        });
+        
+        setStatus('就绪');
+        updateModBadge();
+        initViewportStructure();
+
+		// 方法接口
+		window.hexEditor = {
+    		fileInput,
+			downloadFile,
+        };
+    })();
+</script>
+</body>
+    </html>
