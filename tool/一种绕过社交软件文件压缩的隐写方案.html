@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>一种绕过社交软件文件压缩的隐写方案</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 1.1rem;
+        }
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        h2 {
+            color: #3498db;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f0f0f0;
+            margin-bottom: 20px;
+        }
+        .upload-area {
+            border: 2px dashed #3498db;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background-color: #f8fafc;
+        }
+        .upload-area:hover {
+            background-color: #ebf5fb;
+            border-color: #2980b9;
+        }
+        .upload-icon {
+            font-size: 40px;
+            color: #3498db;
+            margin-bottom: 10px;
+        }
+        .image-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .preview-container {
+            text-align: center;
+            flex: 1;
+            min-width: 150px;
+        }
+        .preview-image {
+            max-width: 100%;
+            max-height: 150px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .preview-label {
+            display: block;
+            margin-top: 5px;
+            font-size: 0.9rem;
+            color: #7f8c8d;
+        }
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            resize: vertical;
+            margin: 10px 0;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: background 0.3s;
+            width: 100%;
+            margin: 5px 0;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .result-area {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+        }
+        .hidden {
+            display: none;
+        }
+        .message {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .file-input {
+            display: none;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .action-buttons button {
+            flex: 1;
+        }
+        .copy-btn {
+            background: #2ecc71;
+        }
+        .copy-btn:hover {
+            background: #27ae60;
+        }
+        .decrypt-btn {
+            background: #e74c3c;
+        }
+        .decrypt-btn:hover {
+            background: #c0392b;
+        }
+        .step {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .step-number {
+            display: inline-block;
+            width: 25px;
+            height: 25px;
+            background: #3498db;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 25px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>图片Base64加密工具</h1>
+            <p class="subtitle">使用一张图片作为密钥，加密/解密另一张图片的Base64编码。其实再大胆一点，这里就偷个懒（这也太懒了吧，本来就是丢给AI写的）</p>
+        </header>
+
+        <div class="main-content">
+            <!-- 加密部分 -->
+            <div class="card">
+                <h2>图片加密</h2>
+                
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <strong>选择要加密的图片（目标图片）</strong>
+                </div>
+                <div id="encryptImageUpload" class="upload-area">
+                    <div class="upload-icon">📁</div>
+                    <p>拖放图片到此区域或点击选择</p>
+                    <p class="preview-label">支持JPG、PNG、GIF等格式</p>
+                </div>
+                <input type="file" id="encryptFileInput" class="file-input" accept="image/*">
+                
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <strong>选择作为密钥的图片（上传社交网站后下载的被压缩的图）</strong>
+                </div>
+                <div id="keyImageUpload" class="upload-area">
+                    <div class="upload-icon">🔑</div>
+                    <p>拖放密钥图片到此区域或点击选择</p>
+                    <p class="preview-label">此图片的Base64将用作AES加密密钥</p>
+                </div>
+                <input type="file" id="keyFileInput" class="file-input" accept="image/*">
+                
+                <div class="image-preview">
+                    <div class="preview-container">
+                        <img id="encryptPreview" class="preview-image hidden">
+                        <span class="preview-label" id="encryptPreviewLabel">待加密图片预览</span>
+                    </div>
+                    <div class="preview-container">
+                        <img id="keyPreview" class="preview-image hidden">
+                        <span class="preview-label" id="keyPreviewLabel">密钥图片预览</span>
+                    </div>
+                </div>
+                
+                <button id="encryptBtn" disabled>加密图片</button>
+                
+                <div id="encryptResult" class="result-area hidden">
+                    <h3>加密结果</h3>
+                    <textarea id="encryptedText" readonly placeholder="加密后的文本将显示在这里"></textarea>
+                    <div class="action-buttons">
+                        <button id="copyEncrypted" class="copy-btn">复制加密文本</button>
+                    </div>
+                </div>
+                
+                <div id="encryptMessage" class="message hidden"></div>
+            </div>
+
+            <!-- 解密部分 -->
+            <div class="card">
+                <h2>图片解密</h2>
+                
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <strong>选择作为密钥的图片（社交软件上下载的图）</strong>
+                </div>
+                <div id="decryptKeyImageUpload" class="upload-area">
+                    <div class="upload-icon">🔑</div>
+                    <p>拖放密钥图片到此区域或点击选择</p>
+                    <p class="preview-label">此图片的Base64将用作AES解密密钥</p>
+                </div>
+                <input type="file" id="decryptKeyFileInput" class="file-input" accept="image/*">
+                
+                <div class="preview-container">
+                    <img id="decryptKeyPreview" class="preview-image hidden">
+                    <span class="preview-label">密钥图片预览</span>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <strong>输入加密文本</strong>
+                </div>
+                <textarea id="cipherText" placeholder="在此粘贴加密文本..."></textarea>
+                
+                <button id="decryptBtn" disabled>解密图片</button>
+                
+                <div id="decryptResult" class="result-area hidden">
+                    <h3>解密结果</h3>
+                    <div class="preview-container">
+                        <img id="decryptedPreview" class="preview-image">
+                        <span class="preview-label">解密后的图片</span>
+                    </div>
+                    <div class="action-buttons">
+                        <button id="downloadDecrypted" class="copy-btn">下载解密图片</button>
+                    </div>
+                </div>
+                
+                <div id="decryptMessage" class="message hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 加密部分元素
+            const encryptImageUpload = document.getElementById('encryptImageUpload');
+            const encryptFileInput = document.getElementById('encryptFileInput');
+            const keyImageUpload = document.getElementById('keyImageUpload');
+            const keyFileInput = document.getElementById('keyFileInput');
+            const encryptPreview = document.getElementById('encryptPreview');
+            const keyPreview = document.getElementById('keyPreview');
+            const encryptBtn = document.getElementById('encryptBtn');
+            const encryptResult = document.getElementById('encryptResult');
+            const encryptedText = document.getElementById('encryptedText');
+            const copyEncrypted = document.getElementById('copyEncrypted');
+            const encryptMessage = document.getElementById('encryptMessage');
+            
+            // 解密部分元素
+            const decryptKeyImageUpload = document.getElementById('decryptKeyImageUpload');
+            const decryptKeyFileInput = document.getElementById('decryptKeyFileInput');
+            const decryptKeyPreview = document.getElementById('decryptKeyPreview');
+            const cipherText = document.getElementById('cipherText');
+            const decryptBtn = document.getElementById('decryptBtn');
+            const decryptResult = document.getElementById('decryptResult');
+            const decryptedPreview = document.getElementById('decryptedPreview');
+            const downloadDecrypted = document.getElementById('downloadDecrypted');
+            const decryptMessage = document.getElementById('decryptMessage');
+            
+            // 状态变量
+            let encryptImageBase64 = null;
+            let keyImageBase64 = null;
+            let decryptKeyImageBase64 = null;
+            
+            // 设置拖放功能
+            setupDragAndDrop(encryptImageUpload, encryptFileInput, handleEncryptImage);
+            setupDragAndDrop(keyImageUpload, keyFileInput, handleKeyImage);
+            setupDragAndDrop(decryptKeyImageUpload, decryptKeyFileInput, handleDecryptKeyImage);
+            
+            // 点击上传区域触发文件输入
+            encryptImageUpload.addEventListener('click', () => encryptFileInput.click());
+            keyImageUpload.addEventListener('click', () => keyFileInput.click());
+            decryptKeyImageUpload.addEventListener('click', () => decryptKeyFileInput.click());
+            
+            // 文件输入变化处理
+            encryptFileInput.addEventListener('change', function() {
+                if (this.files.length) handleEncryptImage(this.files[0]);
+            });
+            
+            keyFileInput.addEventListener('change', function() {
+                if (this.files.length) handleKeyImage(this.files[0]);
+            });
+            
+            decryptKeyFileInput.addEventListener('change', function() {
+                if (this.files.length) handleDecryptKeyImage(this.files[0]);
+            });
+            
+            // 加密按钮点击事件
+            encryptBtn.addEventListener('click', encryptImage);
+            
+            // 解密按钮点击事件
+            decryptBtn.addEventListener('click', decryptImage);
+            
+            // 复制加密文本
+            copyEncrypted.addEventListener('click', function() {
+                encryptedText.select();
+                document.execCommand('copy');
+                showMessage(encryptMessage, '加密文本已复制到剪贴板!', 'success');
+            });
+            
+            // 下载解密图片
+            downloadDecrypted.addEventListener('click', function() {
+                const link = document.createElement('a');
+                link.download = 'decrypted-image.png';
+                link.href = decryptedPreview.src;
+                link.click();
+            });
+            
+            // 监听解密文本输入
+            cipherText.addEventListener('input', function() {
+                updateDecryptButtonState();
+            });
+            
+            // 设置拖放区域功能
+            function setupDragAndDrop(dropArea, fileInput, handler) {
+                ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                    dropArea.addEventListener(eventName, preventDefaults, false);
+                });
+                
+                function preventDefaults(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                
+                ['dragenter', 'dragover'].forEach(eventName => {
+                    dropArea.addEventListener(eventName, () => {
+                        dropArea.style.backgroundColor = '#ebf5fb';
+                        dropArea.style.borderColor = '#2980b9';
+                    }, false);
+                });
+                
+                ['dragleave', 'drop'].forEach(eventName => {
+                    dropArea.addEventListener(eventName, () => {
+                        dropArea.style.backgroundColor = '#f8fafc';
+                        dropArea.style.borderColor = '#3498db';
+                    }, false);
+                });
+                
+                dropArea.addEventListener('drop', function(e) {
+                    const dt = e.dataTransfer;
+                    const files = dt.files;
+                    if (files.length) {
+                        handler(files[0]);
+                    }
+                }, false);
+            }
+            
+            // 处理加密图片
+            function handleEncryptImage(file) {
+                if (!file.type.match('image.*')) {
+                    showMessage(encryptMessage, '请选择有效的图片文件!', 'error');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    encryptImageBase64 = e.target.result;
+                    encryptPreview.src = encryptImageBase64;
+                    encryptPreview.classList.remove('hidden');
+                    updateEncryptButtonState();
+                };
+                reader.readAsDataURL(file);
+            }
+            
+            // 处理密钥图片
+            function handleKeyImage(file) {
+                if (!file.type.match('image.*')) {
+                    showMessage(encryptMessage, '请选择有效的图片文件!', 'error');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    keyImageBase64 = e.target.result;
+                    keyPreview.src = keyImageBase64;
+                    keyPreview.classList.remove('hidden');
+                    updateEncryptButtonState();
+                };
+                reader.readAsDataURL(file);
+            }
+            
+            // 处理解密密钥图片
+            function handleDecryptKeyImage(file) {
+                if (!file.type.match('image.*')) {
+                    showMessage(decryptMessage, '请选择有效的图片文件!', 'error');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    decryptKeyImageBase64 = e.target.result;
+                    decryptKeyPreview.src = decryptKeyImageBase64;
+                    decryptKeyPreview.classList.remove('hidden');
+                    updateDecryptButtonState();
+                };
+                reader.readAsDataURL(file);
+            }
+            
+            // 更新加密按钮状态
+            function updateEncryptButtonState() {
+                encryptBtn.disabled = !(encryptImageBase64 && keyImageBase64);
+            }
+            
+            // 更新解密按钮状态
+            function updateDecryptButtonState() {
+                decryptBtn.disabled = !(decryptKeyImageBase64 && cipherText.value.trim());
+            }
+            
+            // 加密图片
+            function encryptImage() {
+                if (!encryptImageBase64 || !keyImageBase64) {
+                    showMessage(encryptMessage, '请先选择要加密的图片和密钥图片!', 'error');
+                    return;
+                }
+                
+                try {
+                    // 提取纯Base64部分（去掉Data URL前缀）
+                    const pureImageBase64 = encryptImageBase64.split(',')[1];
+                    const pureKeyBase64 = keyImageBase64.split(',')[1];
+                    
+                    // 使用密钥图片的Base64作为AES密钥
+                    // 注意：这里我们使用CryptoJS的AES加密，密钥是密钥图片的Base64字符串
+                    const encrypted = CryptoJS.AES.encrypt(pureImageBase64, pureKeyBase64).toString();
+                    
+                    encryptedText.value = encrypted;
+                    encryptResult.classList.remove('hidden');
+                    showMessage(encryptMessage, '图片加密成功!', 'success');
+                } catch (error) {
+                    showMessage(encryptMessage, '加密失败: ' + error.message, 'error');
+                }
+            }
+            
+            // 解密图片
+            function decryptImage() {
+                if (!decryptKeyImageBase64 || !cipherText.value.trim()) {
+                    showMessage(decryptMessage, '请先选择密钥图片并输入加密文本!', 'error');
+                    return;
+                }
+                
+                try {
+                    const cipher = cipherText.value.trim();
+                    const pureKeyBase64 = decryptKeyImageBase64.split(',')[1];
+                    
+                    // 使用AES解密
+                    const decrypted = CryptoJS.AES.decrypt(cipher, pureKeyBase64);
+                    const decryptedBase64 = decrypted.toString(CryptoJS.enc.Utf8);
+                    
+                    if (!decryptedBase64) {
+                        throw new Error('解密失败，可能是密钥不正确或加密文本已损坏');
+                    }
+                    
+                    // 构建Data URL
+                    const imageDataUrl = `data:image/png;base64,${decryptedBase64}`;
+                    
+                    // 显示解密后的图片
+                    decryptedPreview.src = imageDataUrl;
+                    decryptResult.classList.remove('hidden');
+                    showMessage(decryptMessage, '图片解密成功!', 'success');
+                } catch (error) {
+                    showMessage(decryptMessage, '解密失败: ' + error.message, 'error');
+                }
+            }
+            
+            // 显示消息
+            function showMessage(messageElement, text, type) {
+                messageElement.textContent = text;
+                messageElement.className = 'message ' + type;
+                messageElement.classList.remove('hidden');
+                
+                setTimeout(() => {
+                    messageElement.classList.add('hidden');
+                }, 5000);
+            }
+        });
+    </script>
+</body>
+</html>
