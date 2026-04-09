@@ -1,0 +1,1787 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Png LSB隐写提取工具 - 分块提取 + 多格式预览 + 增强查找高亮</title>
+    <!-- 引入 pako 库，用于 UPNG 压缩/解压（解码需要） -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            margin: 0;
+            padding: 24px 20px;
+            color: #1e2a3a;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        .card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+            padding: 24px 28px;
+            margin-bottom: 28px;
+        }
+        h1 {
+            font-size: 1.9rem;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #1e3c72, #2b4c7c);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .sub {
+            color: #5a6e7c;
+            border-left: 4px solid #3b82f6;
+            padding-left: 16px;
+            margin-bottom: 24px;
+            font-size: 0.95rem;
+        }
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        .control-group {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 16px 20px;
+            flex: 1;
+            min-width: 220px;
+            border: 1px solid #e2e8f0;
+        }
+        .control-group label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            color: #0f3b5c;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid #cbd5e1;
+            background: white;
+            font-size: 0.9rem;
+        }
+        textarea {
+            font-family: monospace;
+            resize: vertical;
+        }
+        button {
+            background: #1e4a76;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 40px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 0.9rem;
+        }
+        button.primary { background: #0f3b5c; }
+        button.primary:hover { background: #1e4a76; transform: translateY(-1px); }
+        button.secondary { background: #2c6e9e; }
+        button.warning { background: #b45309; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .info-bar {
+            background: #eef2ff;
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            margin: 16px 0;
+            word-break: break-all;
+        }
+        .img-preview {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 16px;
+            margin-top: 12px;
+            border: 1px solid #ddd;
+        }
+        .file-input-label {
+            background: #e2e8f0;
+            padding: 8px 12px;
+            border-radius: 30px;
+            display: inline-block;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .warning-note {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            margin-top: 8px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: #3b82f6;
+            transition: width 0.2s;
+        }
+        .button-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .sequence-config {
+            background: #fefce8;
+            border-radius: 20px;
+            padding: 16px;
+            margin-top: 10px;
+            border: 1px solid #e2e8f0;
+        }
+        .pixel-table {
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        .bit-matrix {
+            border-collapse: collapse;
+            font-size: 0.75rem;
+            background: white;
+            border-radius: 16px;
+        }
+        .bit-matrix th {
+            background: #1e3a5f;
+            color: white;
+            padding: 8px 6px;
+            text-align: center;
+            font-weight: 600;
+        }
+        .bit-matrix td {
+            border: 1px solid #cbd5e1;
+            padding: 6px 4px;
+            text-align: center;
+            vertical-align: top;
+        }
+        .bit-check-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+        }
+        .bit-check-group label {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: 0.1s;
+        }
+        .bit-check-group label:hover {
+            background: #e2e8f0;
+        }
+        .bit-check-group input {
+            width: auto;
+            margin: 0;
+            transform: scale(0.8);
+        }
+        .order-list {
+            background: #0f172a;
+            color: #e2e8f0;
+            border-radius: 16px;
+            padding: 12px;
+            max-height: 180px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.8rem;
+        }
+        .order-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 8px;
+            border-bottom: 1px solid #334155;
+        }
+        .order-item span {
+            font-weight: 500;
+        }
+        .del-order {
+            background: #b91c1c;
+            border: none;
+            padding: 2px 8px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            cursor: pointer;
+        }
+        .badge {
+            background: #3b82f6;
+            border-radius: 30px;
+            padding: 2px 8px;
+            font-size: 0.7rem;
+        }
+        .extracted-data {
+            background: #0f172a;
+            border-radius: 20px;
+            padding: 20px;
+            margin-top: 24px;
+            border: 1px solid #334155;
+        }
+        .result-label {
+            font-weight: 700;
+            margin-top: 18px;
+            margin-bottom: 8px;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #334155;
+            color: #e2e8f0;
+        }
+        .result-label:first-of-type {
+            margin-top: 0;
+        }
+        .result-area {
+            background: #0f172a;
+            color: #e2e8f0;
+            border-radius: 16px;
+            padding: 16px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            overflow-y: auto;
+            white-space: pre;
+            max-height: 320px;
+            line-height: 1.4;
+            border: 1px solid #1e293b;
+        }
+        .result-area pre {
+            margin: 0;
+            font-family: inherit;
+            background: transparent;
+            color: inherit;
+        }
+        .extract-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #334155;
+        }
+        .extract-header strong {
+            font-size: 1.1rem;
+            color: #f1f5f9;
+        }
+        .truncation-warning {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            margin-bottom: 12px;
+        }
+        /* 新增查找栏样式 */
+        .search-bar {
+            background: #1e293b;
+            border-radius: 20px;
+            padding: 14px 18px;
+            margin: 16px 0 20px 0;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            gap: 12px;
+            border: 1px solid #334155;
+        }
+        .search-group {
+            flex: 2;
+            min-width: 160px;
+        }
+        .search-group label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: #94a3b8;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .search-group input, .search-group select {
+            background: #0f172a;
+            color: #e2e8f0;
+            border: 1px solid #475569;
+            padding: 8px 12px;
+            border-radius: 28px;
+            width: 100%;
+        }
+        .search-group input:focus {
+            border-color: #3b82f6;
+            outline: none;
+        }
+        .search-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .search-actions button {
+            padding: 6px 16px;
+            font-size: 0.8rem;
+            background: #2c6e9e;
+        }
+        .search-actions button.clear-highlight {
+            background: #5b6e8c;
+        }
+        .match-counter {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-size: 0.75rem;
+            font-family: monospace;
+            border: 1px solid #475569;
+        }
+        mark.search-highlight {
+            background-color: #facc15;
+            color: #0f172a;
+            border-radius: 4px;
+            padding: 0 1px;
+            font-weight: 500;
+            box-shadow: 0 0 0 1px #eab308;
+        }
+        mark.search-highlight.current {
+            background-color: #ff8c00;
+            color: #000;
+            box-shadow: 0 0 0 2px #ff4500;
+        }
+        footer {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #5c6f87;
+            margin-top: 30px;
+        }
+        @media (max-width: 700px) {
+            .card { padding: 16px; }
+            .bit-check-group { gap: 3px; }
+            .result-area { font-size: 0.7rem; max-height: 260px; }
+            .search-bar { flex-direction: column; align-items: stretch; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <h1>🔓 LSB 隐写提取工具 · 分块提取 + 多格式预览 + 增强查找</h1>
+        <div class="sub">🎛️ 使用与嵌入时完全相同的顺序和偏移量，支持限制提取字节数（提前终止），分块处理超大图像。<span style="background:#dbeafe; padding:2px 6px; border-radius:12px;">PNG 无损像素提取 (UPNG 直接解码)</span></div>
+
+        <div class="flex-row" style="margin-bottom: 20px;">
+            <div style="flex:2">
+                <label>📸 含隐写信息的图像 (PNG 最佳)</label>
+                <input type="file" id="stegoImageUpload" accept="image/png, image/jpeg, image/bmp, image/webp">
+                <div id="imgPreviewContainer" style="margin-top: 10px;"></div>
+                <div id="loadModeInfo" class="warning-note" style="margin-top:8px; background:#e0f2fe;"></div>
+            </div>
+        </div>
+
+        <!-- 自定义位顺序配置区 -->
+        <div class="sequence-config">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                <label style="font-weight: bold;">🧩 嵌入顺序定义 (必须与嵌入时一致)</label>
+                <div>
+                    <button id="addPixelRowBtn" type="button" style="background: #2b6e9e; padding: 6px 12px;">➕ 添加像素行</button>
+                    <button id="resetOrderBtn" type="button" style="background: #6c757d; padding: 6px 12px;">🗑️ 清空顺序</button>
+                </div>
+            </div>
+            <div class="pixel-table" id="pixelTableContainer"></div>
+            <div style="margin-top: 12px;">
+                <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+                    <span><strong>📋 嵌入顺序 (点击顺序) </strong><span id="orderCountBadge" class="badge">0</span></span>
+                    <span><small>⚠️ 提取时需完全一致，包括顺序和偏移量</small></span>
+                </div>
+                <div id="orderListPanel" class="order-list">
+                    <div style="color:#94a3b8; text-align:center;">暂无顺序，请点击上方复选框定义嵌入比特位顺序</div>
+                </div>
+                <div class="warning-note" style="margin-top:8px;">
+                    💡 提示：按嵌入时的顺序，依次点击R/G/B/A通道的bit复选框。支持多行像素，顺序必须完全相同。
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-row" style="margin-top: 16px;">
+            <div class="control-group">
+                <label>📍 嵌入偏移量 (跳过前N个顺序槽位)</label>
+                <input type="number" id="extractOffset" value="0" min="0">
+                <div class="warning-note">必须与嵌入时的偏移量一致</div>
+            </div>
+            <div class="control-group">
+                <label>🔢 最大提取字节数 (0 = 全部提取)</label>
+                <input type="number" id="maxExtractBytes" value="0" min="0" step="1">
+                <div class="warning-note">指定提取字节数，达到后立即停止，提高效率 (0表示提取所有可用数据)</div>
+            </div>
+            <div class="control-group">
+                <label>📊 提取信息</label>
+                <div id="capacityInfo" class="warning-note" style="margin-bottom: 12px;">📊 未加载图像</div>
+                <div class="button-group">
+                    <button id="extractBtn" class="primary">🔍 开始提取数据 (分块)</button>
+                </div>
+                <div id="progressContainer" style="display:none;">
+                    <div class="progress-bar"><div id="extractProgress" class="progress-fill"></div></div>
+                    <div id="progressText" style="font-size:0.75rem;">提取中...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="extractInfo" class="info-bar">💡 上传隐写图像 → 定义完全相同的顺序和偏移量 → 可选限制提取字节数 → 点击提取 (分块处理，支持提前终止)。提取后展示二进制/十六进制/UTF-8全量预览，支持内容查找高亮。</div>
+
+        <!-- 提取结果显示区域 (多格式预览) -->
+        <div id="resultArea" class="extracted-data" style="display: none;">
+            <div class="extract-header">
+                <strong>📦 提取的数据 <span id="extractLimitStatus"></span> (共 <span id="extractedSize">0</span> 字节)</strong>
+                <div class="button-group">
+                    <button id="saveAsFileBtn" class="secondary">💾 保存为文件</button>
+                </div>
+            </div>
+            <div id="previewTruncationWarning" class="truncation-warning" style="display: none;"></div>
+            
+            <!-- 新增查找栏 -->
+            <div class="search-bar" id="searchBar">
+                <div class="search-group">
+                    <label>🔍 查找内容</label>
+                    <input type="text" id="searchKeyword" placeholder="二进制: 01010101  十六进制: FF A0 或 FFA0  文本: 关键词" autocomplete="off">
+                </div>
+                <div class="search-group">
+                    <label>📄 查找视图</label>
+                    <select id="searchView">
+                        <option value="binary">二进制编码视图</option>
+                        <option value="hex">十六进制转储视图</option>
+                        <option value="utf8">UTF-8 文本视图</option>
+                    </select>
+                </div>
+                <div class="search-actions">
+                    <button id="searchBtn" class="primary">🔎 查找高亮</button>
+                    <button id="clearHighlightBtn" class="clear-highlight">✖️ 清除高亮</button>
+                    <button id="prevMatchBtn" title="上一个匹配">⬆️ 上一个</button>
+                    <button id="nextMatchBtn" title="下一个匹配">⬇️ 下一个</button>
+                    <span id="matchCounter" class="match-counter">0 / 0</span>
+                </div>
+            </div>
+            
+            <div class="result-label">📟 二进制编码 (每字节8位 · 行首偏移)</div>
+            <div id="binaryResult" class="result-area"><pre>—</pre></div>
+            
+            <div class="result-label">🔢 十六进制转储 (每行16字节 · 偏移行标)</div>
+            <div id="hexResult" class="result-area"><pre>—</pre></div>
+            
+            <div class="result-label">🌐 UTF-8 文本 (每16字节一组 · 字节偏移行标)</div>
+            <div id="utf8Result" class="result-area"><pre>—</pre></div>
+        </div>
+    </div>
+    <footer>⚠️ 提取参数必须与嵌入时完全一致（顺序列表、偏移量）。支持限制提取字节数，分块处理。<br>✅ PNG 图像采用 UPNG.js 直接解码，完全绕过伽马/色彩校正，确保像素值绝对精确。<br>🔍 查找功能支持二进制(忽略空格)、十六进制(忽略空格/大小写)、UTF-8文本高亮及跳转。</footer>
+</div>
+
+<script>
+// ================= 内嵌 UPNG 解码器 (完整复制自嵌入工具，确保 PNG 无损读取) =================
+var UPNG = (function() {
+    var _bin = {
+        nextZero   : function(data,p)  {  while(data[p]!=0) p++;  return p;  },
+        readUshort : function(buff,p)  {  return (buff[p]<< 8) | buff[p+1];  },
+        writeUshort: function(buff,p,n){  buff[p] = (n>>8)&255;  buff[p+1] = n&255;  },
+        readUint   : function(buff,p)  {  return (buff[p]*(256*256*256)) + ((buff[p+1]<<16) | (buff[p+2]<<8) | buff[p+3]);  },
+        writeUint  : function(buff,p,n){  buff[p]=(n>>24)&255;  buff[p+1]=(n>>16)&255;  buff[p+2]=(n>>8)&255;  buff[p+3]=n&255;  },
+        readASCII  : function(buff,p,l){  var s = "";  for(var i=0; i<l; i++) s += String.fromCharCode(buff[p+i]);  return s;    },
+        writeASCII : function(data,p,s){  for(var i=0; i<s.length; i++) data[p+i] = s.charCodeAt(i);  },
+        readBytes  : function(buff,p,l){  var arr = [];   for(var i=0; i<l; i++) arr.push(buff[p+i]);  return arr;  },
+        pad : function(n) { return n.length < 2 ? "0" + n : n; },
+        readUTF8 : function(buff, p, l) {
+            var s = "", ns;
+            for(var i=0; i<l; i++) s += "%" + _bin.pad(buff[p+i].toString(16));
+            try {  ns = decodeURIComponent(s); }
+            catch(e) {  return _bin.readASCII(buff, p, l);  }
+            return  ns;
+        }
+    }
+
+    function toRGBA8(out)
+    {
+        var w = out.width, h = out.height;
+        if(out.tabs.acTL==null) return [decodeImage(out.data, w, h, out).buffer];
+        
+        var frms = [];
+        if(out.frames[0].data==null) out.frames[0].data = out.data;
+        
+        var len = w*h*4, img = new Uint8Array(len), empty = new Uint8Array(len), prev=new Uint8Array(len);
+        for(var i=0; i<out.frames.length; i++)
+        {
+            var frm = out.frames[i];
+            var fx=frm.rect.x, fy=frm.rect.y, fw = frm.rect.width, fh = frm.rect.height;
+            var fdata = decodeImage(frm.data, fw,fh, out);
+            
+            if(i!=0) for(var j=0; j<len; j++) prev[j]=img[j];
+            
+            if     (frm.blend==0) _copyTile(fdata, fw, fh, img, w, h, fx, fy, 0);
+            else if(frm.blend==1) _copyTile(fdata, fw, fh, img, w, h, fx, fy, 1);
+            
+            frms.push(img.buffer.slice(0));
+            
+            if     (frm.dispose==0) {}
+            else if(frm.dispose==1) _copyTile(empty, fw, fh, img, w, h, fx, fy, 0);
+            else if(frm.dispose==2) for(var j=0; j<len; j++) img[j]=prev[j];
+        }
+        return frms;
+    }
+    function decodeImage(data, w, h, out)
+    {
+        var area = w*h, bpp = _getBPP(out);
+        var bpl = Math.ceil(w*bpp/8);	// bytes per line
+
+        var bf = new Uint8Array(area*4), bf32 = new Uint32Array(bf.buffer);
+        var ctype = out.ctype, depth = out.depth;
+        var rs = _bin.readUshort;
+        
+        if     (ctype==6) { // RGB + alpha
+            var qarea = area<<2;
+            if(depth== 8) for(var i=0; i<qarea;i+=4) {  bf[i] = data[i];  bf[i+1] = data[i+1];  bf[i+2] = data[i+2];  bf[i+3] = data[i+3]; }
+            if(depth==16) for(var i=0; i<qarea;i++ ) {  bf[i] = data[i<<1];  }
+        }
+        else if(ctype==2) {	// RGB
+            var ts=out.tabs["tRNS"];
+            if(ts==null) {
+                if(depth== 8) for(var i=0; i<area; i++) {  var ti=i*3;  bf32[i] = (255<<24)|(data[ti+2]<<16)|(data[ti+1]<<8)|data[ti];  }
+                if(depth==16) for(var i=0; i<area; i++) {  var ti=i*6;  bf32[i] = (255<<24)|(data[ti+4]<<16)|(data[ti+2]<<8)|data[ti];  }
+            }
+            else {  var tr=ts[0], tg=ts[1], tb=ts[2];
+                if(depth== 8) for(var i=0; i<area; i++) {  var qi=i<<2, ti=i*3;  bf32[i] = (255<<24)|(data[ti+2]<<16)|(data[ti+1]<<8)|data[ti];
+                    if(data[ti]   ==tr && data[ti+1]   ==tg && data[ti+2]   ==tb) bf[qi+3] = 0;  }
+                if(depth==16) for(var i=0; i<area; i++) {  var qi=i<<2, ti=i*6;  bf32[i] = (255<<24)|(data[ti+4]<<16)|(data[ti+2]<<8)|data[ti];
+                    if(rs(data,ti)==tr && rs(data,ti+2)==tg && rs(data,ti+4)==tb) bf[qi+3] = 0;  }
+            }
+        }
+        else if(ctype==3) {	// palette
+            var p=out.tabs["PLTE"], ap=out.tabs["tRNS"], tl=ap?ap.length:0;
+            if(depth==1) for(var y=0; y<h; y++) {  var s0 = y*bpl, t0 = y*w;
+                for(var i=0; i<w; i++) { var qi=(t0+i)<<2, j=((data[s0+(i>>3)]>>(7-((i&7)<<0)))& 1), cj=3*j;  bf[qi]=p[cj];  bf[qi+1]=p[cj+1];  bf[qi+2]=p[cj+2];  bf[qi+3]=(j<tl)?ap[j]:255;  }
+            }
+            if(depth==2) for(var y=0; y<h; y++) {  var s0 = y*bpl, t0 = y*w;
+                for(var i=0; i<w; i++) { var qi=(t0+i)<<2, j=((data[s0+(i>>2)]>>(6-((i&3)<<1)))& 3), cj=3*j;  bf[qi]=p[cj];  bf[qi+1]=p[cj+1];  bf[qi+2]=p[cj+2];  bf[qi+3]=(j<tl)?ap[j]:255;  }
+            }
+            if(depth==4) for(var y=0; y<h; y++) {  var s0 = y*bpl, t0 = y*w;
+                for(var i=0; i<w; i++) { var qi=(t0+i)<<2, j=((data[s0+(i>>1)]>>(4-((i&1)<<2)))&15), cj=3*j;  bf[qi]=p[cj];  bf[qi+1]=p[cj+1];  bf[qi+2]=p[cj+2];  bf[qi+3]=(j<tl)?ap[j]:255;  }
+            }
+            if(depth==8) for(var i=0; i<area; i++ ) {  var qi=i<<2, j=data[i]                      , cj=3*j;  bf[qi]=p[cj];  bf[qi+1]=p[cj+1];  bf[qi+2]=p[cj+2];  bf[qi+3]=(j<tl)?ap[j]:255;  }
+        }
+        else if(ctype==4) {	// gray + alpha
+            if(depth== 8)  for(var i=0; i<area; i++) {  var qi=i<<2, di=i<<1, gr=data[di];  bf[qi]=gr;  bf[qi+1]=gr;  bf[qi+2]=gr;  bf[qi+3]=data[di+1];  }
+            if(depth==16)  for(var i=0; i<area; i++) {  var qi=i<<2, di=i<<2, gr=data[di];  bf[qi]=gr;  bf[qi+1]=gr;  bf[qi+2]=gr;  bf[qi+3]=data[di+2];  }
+        }
+        else if(ctype==0) {	// gray
+            var tr = out.tabs["tRNS"] ? out.tabs["tRNS"] : -1;
+            for(var y=0; y<h; y++) {
+                var off = y*bpl, to = y*w;
+                if     (depth== 1) for(var x=0; x<w; x++) {  var gr=255*((data[off+(x>>>3)]>>>(7 -((x&7)   )))& 1), al=(gr==tr*255)?0:255;  bf32[to+x]=(al<<24)|(gr<<16)|(gr<<8)|gr;  }
+                else if(depth== 2) for(var x=0; x<w; x++) {  var gr= 85*((data[off+(x>>>2)]>>>(6 -((x&3)<<1)))& 3), al=(gr==tr* 85)?0:255;  bf32[to+x]=(al<<24)|(gr<<16)|(gr<<8)|gr;  }
+                else if(depth== 4) for(var x=0; x<w; x++) {  var gr= 17*((data[off+(x>>>1)]>>>(4 -((x&1)<<2)))&15), al=(gr==tr* 17)?0:255;  bf32[to+x]=(al<<24)|(gr<<16)|(gr<<8)|gr;  }
+                else if(depth== 8) for(var x=0; x<w; x++) {  var gr=data[off+     x], al=(gr                 ==tr)?0:255;  bf32[to+x]=(al<<24)|(gr<<16)|(gr<<8)|gr;  }
+                else if(depth==16) for(var x=0; x<w; x++) {  var gr=data[off+(x<<1)], al=(rs(data,off+(x<<1))==tr)?0:255;  bf32[to+x]=(al<<24)|(gr<<16)|(gr<<8)|gr;  }
+            }
+        }
+        return bf;
+    }
+
+    function decode(buff)
+    {
+        var data = new Uint8Array(buff), offset = 8, bin = _bin, rUs = bin.readUshort, rUi = bin.readUint;
+        var out = {tabs:{}, frames:[]};
+        var dd = new Uint8Array(data.length), doff = 0;	 // put all IDAT data into it
+        var fd, foff = 0;	// frames
+        
+        var mgck = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+        for(var i=0; i<8; i++) if(data[i]!=mgck[i]) throw "The input is not a PNG file!";
+
+        while(offset<data.length)
+        {
+            var len  = bin.readUint(data, offset);  offset += 4;
+            var type = bin.readASCII(data, offset, 4);  offset += 4;
+            
+            if     (type=="IHDR")  {  _IHDR(data, offset, out);  }
+            else if(type=="iCCP")  {
+                var off = offset;  while(data[off]!=0) off++;
+                var nam = bin.readASCII(data,offset,off-offset);
+                var cpr = data[off+1];
+                var fil = data.slice(off+2,offset+len);
+                var res = null;
+                try { res = _inflate(fil); } catch(e) {  res = inflateRaw(fil);  }
+                out.tabs[type] = res;
+            }
+            else if(type=="CgBI")  {  out.tabs[type] = data.slice(offset,offset+4);  }
+            else if(type=="IDAT") {
+                for(var i=0; i<len; i++) dd[doff+i] = data[offset+i];
+                doff += len;
+            }
+            else if(type=="acTL")  {
+                out.tabs[type] = {  num_frames:rUi(data, offset), num_plays:rUi(data, offset+4)  };
+                fd = new Uint8Array(data.length);
+            }
+            else if(type=="fcTL")  {
+                if(foff!=0) {  var fr = out.frames[out.frames.length-1];
+                    fr.data = _decompress(out, fd.slice(0,foff), fr.rect.width, fr.rect.height);  foff=0;
+                }
+                var rct = {x:rUi(data, offset+12),y:rUi(data, offset+16),width:rUi(data, offset+4),height:rUi(data, offset+8)};
+                var del = rUs(data, offset+22);  del = rUs(data, offset+20) / (del==0?100:del);
+                var frm = {rect:rct, delay:Math.round(del*1000), dispose:data[offset+24], blend:data[offset+25]};
+                out.frames.push(frm);
+            }
+            else if(type=="fdAT") {
+                for(var i=0; i<len-4; i++) fd[foff+i] = data[offset+i+4];
+                foff += len-4;
+            }
+            else if(type=="pHYs") {
+                out.tabs[type] = [bin.readUint(data, offset), bin.readUint(data, offset+4), data[offset+8]];
+            }
+            else if(type=="cHRM") {
+                out.tabs[type] = [];
+                for(var i=0; i<8; i++) out.tabs[type].push(bin.readUint(data, offset+i*4));
+            }
+            else if(type=="tEXt" || type=="zTXt") {
+                if(out.tabs[type]==null) out.tabs[type] = {};
+                var nz = bin.nextZero(data, offset);
+                var keyw = bin.readASCII(data, offset, nz-offset);
+                var text, tl=offset+len-nz-1;
+                if(type=="tEXt") text = bin.readASCII(data, nz+1, tl);
+                else {
+                    var bfr = _inflate(data.slice(nz+2,nz+2+tl));
+                    text = bin.readUTF8(bfr,0,bfr.length);
+                }
+                out.tabs[type][keyw] = text;
+            }
+            else if(type=="iTXt") {
+                if(out.tabs[type]==null) out.tabs[type] = {};
+                var nz = 0, off = offset;
+                nz = bin.nextZero(data, off);
+                var keyw = bin.readASCII(data, off, nz-off);  off = nz + 1;
+                var cflag = data[off], cmeth = data[off+1];  off+=2;
+                nz = bin.nextZero(data, off);
+                var ltag = bin.readASCII(data, off, nz-off);  off = nz + 1;
+                nz = bin.nextZero(data, off);
+                var tkeyw = bin.readUTF8(data, off, nz-off);  off = nz + 1;
+                var text, tl=len-(off-offset);
+                if(cflag==0) text  = bin.readUTF8(data, off, tl);
+                else {
+                    var bfr = _inflate(data.slice(off,off+tl));
+                    text = bin.readUTF8(bfr,0,bfr.length);
+                }
+                out.tabs[type][keyw] = text;
+            }
+            else if(type=="PLTE") {
+                out.tabs[type] = bin.readBytes(data, offset, len);
+            }
+            else if(type=="hIST") {
+                var pl = out.tabs["PLTE"].length/3;
+                out.tabs[type] = [];  for(var i=0; i<pl; i++) out.tabs[type].push(rUs(data, offset+i*2));
+            }
+            else if(type=="tRNS") {
+                if     (out.ctype==3) out.tabs[type] = bin.readBytes(data, offset, len);
+                else if(out.ctype==0) out.tabs[type] = rUs(data, offset);
+                else if(out.ctype==2) out.tabs[type] = [ rUs(data,offset),rUs(data,offset+2),rUs(data,offset+4) ];
+            }
+            else if(type=="gAMA") out.tabs[type] = bin.readUint(data, offset)/100000;
+            else if(type=="sRGB") out.tabs[type] = data[offset];
+            else if(type=="bKGD")
+            {
+                if     (out.ctype==0 || out.ctype==4) out.tabs[type] = [rUs(data, offset)];
+                else if(out.ctype==2 || out.ctype==6) out.tabs[type] = [rUs(data, offset), rUs(data, offset+2), rUs(data, offset+4)];
+                else if(out.ctype==3) out.tabs[type] = data[offset];
+            }
+            else if(type=="IEND") {
+                break;
+            }
+            offset += len;
+            var crc = bin.readUint(data, offset);  offset += 4;
+        }
+        if(foff!=0) {  var fr = out.frames[out.frames.length-1];
+            fr.data = _decompress(out, fd.slice(0,foff), fr.rect.width, fr.rect.height);
+        }	
+        out.data = _decompress(out, dd, out.width, out.height);
+        
+        delete out.compress;  delete out.interlace;  delete out.filter;
+        return out;
+    }
+
+    function _decompress(out, dd, w, h) {
+        var bpp = _getBPP(out), bpl = Math.ceil(w*bpp/8), buff = new Uint8Array((bpl+1+out.interlace)*h);
+        if(out.tabs["CgBI"]) dd = inflateRaw(dd,buff);
+        else                 dd = _inflate(dd,buff);
+        if     (out.interlace==0) dd = _filterZero(dd, out, 0, w, h);
+        else if(out.interlace==1) dd = _readInterlace(dd, out);
+        return dd;
+    }
+
+    function _inflate(data, buff) {  var out=inflateRaw(new Uint8Array(data.buffer, 2,data.length-6),buff);  return out;  }
+    
+    var inflateRaw=function(){var D=function(){var o=Uint16Array,j=Uint32Array;return{m:new o(16),v:new o(16),
+    d:[16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15],o:[3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258,999,999,999],
+    z:[0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0,0,0,0],B:new o(32),
+    p:[1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577,65535,65535],
+    w:[0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13,0,0],h:new j(32),g:new o(512),s:[],A:new o(32),t:[],k:new o(32768),c:[],
+    a:[],n:new o(32768),e:[],C:new o(512),b:[],i:new o(1<<15),r:new j(286),f:new j(30),l:new j(19),u:new j(15e3),q:new o(1<<16),j:new o(1<<15)}}();
+    function C(o,j){var I=o.length,A,r,i,y,G,f=D.v;for(var y=0;y<=j;y++)f[y]=0;for(y=1;y<I;y+=2)f[o[y]]++;
+    var a=D.m;A=0;f[0]=0;for(r=1;r<=j;r++){A=A+f[r-1]<<1;a[r]=A}for(i=0;i<I;i+=2){G=o[i+1];if(G!=0){o[i]=a[G];
+    a[G]++}}}function t(o,j,I){var A=o.length,r=D.i;for(var i=0;i<A;i+=2)if(o[i+1]!=0){var y=i>>1,G=o[i+1],f=y<<4|G,a=j-G,k=o[i]<<a,N=k+(1<<a);
+    while(k!=N){var x=r[k]>>>15-j;I[x]=f;k++}}}function g(o,j){var I=D.i,A=15-j;for(var r=0;r<o.length;r+=2){var i=o[r]<<j-o[r+1];
+    o[r]=I[i]>>>A}}(function(){var o=1<<15;for(var j=0;j<o;j++){var I=j;I=(I&2863311530)>>>1|(I&1431655765)<<1;
+    I=(I&3435973836)>>>2|(I&858993459)<<2;I=(I&4042322160)>>>4|(I&252645135)<<4;I=(I&4278255360)>>>8|(I&16711935)<<8;
+    D.i[j]=(I>>>16|I<<16)>>>17}function A(r,i,y){while(i--!=0)r.push(0,y)}for(var j=0;j<32;j++){D.B[j]=D.o[j]<<3|D.z[j];
+    D.h[j]=D.p[j]<<4|D.w[j]}A(D.s,144,8);A(D.s,255-143,9);A(D.s,279-255,7);A(D.s,287-279,8);C(D.s,9);t(D.s,9,D.g);
+    g(D.s,9);A(D.t,32,5);C(D.t,5);t(D.t,5,D.A);g(D.t,5);A(D.b,19,0);A(D.c,286,0);A(D.e,30,0);A(D.a,320,0)}());
+    function F(o,j,I){return(o[j>>>3]|o[(j>>>3)+1]<<8)>>>(j&7)&(1<<I)-1}function s(o,j,I){return(o[j>>>3]|o[(j>>>3)+1]<<8|o[(j>>>3)+2]<<16)>>>(j&7)&(1<<I)-1}
+    function w(o,j){return(o[j>>>3]|o[(j>>>3)+1]<<8|o[(j>>>3)+2]<<16)>>>(j&7)}function b(o,j){return(o[j>>>3]|o[(j>>>3)+1]<<8|o[(j>>>3)+2]<<16|o[(j>>>3)+3]<<24)>>>(j&7)}
+    function v(o,j){var I=Uint8Array,r=0,i=0,y=0,G=0,f=0,a=0,k=0,N=0,x=0,P,J;
+    if(o[0]==3&&o[1]==0)return j?j:new I(0);var A=j==null;if(A)j=new I(o.length>>>2<<3);while(r==0){r=s(o,x,1);
+    i=s(o,x+1,2);x+=3;if(i==0){if((x&7)!=0)x+=8-(x&7);var K=(x>>>3)+4,m=o[K-4]|o[K-3]<<8;if(A)j=H(j,N+m);
+    j.set(new I(o.buffer,o.byteOffset+K,m),N);x=K+m<<3;N+=m;continue}if(A)j=H(j,N+(1<<17));if(i==1){P=D.g;
+    J=D.n;a=(1<<9)-1;k=(1<<5)-1}if(i==2){y=F(o,x,5)+257;G=F(o,x+5,5)+1;f=F(o,x+10,4)+4;x+=14;var O=x,Q=1;
+    for(var p=0;p<38;p+=2){D.b[p]=0;D.b[p+1]=0}for(var p=0;p<f;p++){var l=F(o,x+p*3,3);D.b[(D.d[p]<<1)+1]=l;
+    if(l>Q)Q=l}x+=3*f;C(D.b,Q);t(D.b,Q,D.C);P=D.k;J=D.n;x=B(D.C,(1<<Q)-1,y+G,o,x,D.a);var u=d(D.a,0,y,D.c);
+    a=(1<<u)-1;var n=d(D.a,y,G,D.e);k=(1<<n)-1;C(D.c,u);t(D.c,u,P);C(D.e,n);t(D.e,n,J)}while(!0){var h=P[w(o,x)&a];
+    x+=h&15;var L=h>>>4;if(L>>>8==0){j[N++]=L}else if(L==256){break}else{var M=N+L-254;if(L>264){var z=D.B[L-257];
+    M=N+(z>>>3)+F(o,x,z&7);x+=z&7}var e=J[w(o,x)&k];x+=e&15;var E=e>>>4,c=D.h[E],q=(c>>>4)+s(o,x,c&15);x+=c&15;
+    if(A)j=H(j,N+(1<<17));while(N<M){j[N]=j[N++-q];j[N]=j[N++-q];j[N]=j[N++-q];j[N]=j[N++-q]}N=M}}}return j.length==N?j:j.slice(0,N)}function H(o,j){var I=o.length;
+    if(j<=I)return o;var A=new Uint8Array(Math.max(I<<1,j));A.set(o,0);return A}function B(o,j,I,A,r,i){var y=0;
+    while(y<I){var G=o[w(A,r)&j];r+=G&15;var f=G>>>4;if(f<=15){i[y]=f;y++}else{var a=0,k=0;if(f==16){k=3+F(A,r,2);
+    r+=2;a=i[y-1]}else if(f==17){k=3+F(A,r,3);r+=3;a=0}else if(f==18){k=11+F(A,r,7);r+=7;a=0}var N=y+k;while(y<N){i[y]=a;
+    y++}}}return r}function d(o,j,I,A){var r=0,i=0,y=A.length>>>1;while(i<I){var G=o[i+j];A[i<<1]=0;A[(i<<1)+1]=G;
+    if(G>r)r=G;i++}while(i<y){A[i<<1]=0;A[(i<<1)+1]=0;i++}return r}return v}();
+
+    function _readInterlace(data, out)
+    {
+        var w = out.width, h = out.height;
+        var bpp = _getBPP(out), cbpp = bpp>>3, bpl = Math.ceil(w*bpp/8);
+        var img = new Uint8Array( h * bpl );
+        var di = 0;
+
+        var starting_row  = [ 0, 0, 4, 0, 2, 0, 1 ];
+        var starting_col  = [ 0, 4, 0, 2, 0, 1, 0 ];
+        var row_increment = [ 8, 8, 8, 4, 4, 2, 2 ];
+        var col_increment = [ 8, 8, 4, 4, 2, 2, 1 ];
+
+        var pass=0;
+        while(pass<7)
+        {
+            var ri = row_increment[pass], ci = col_increment[pass];
+            var sw = 0, sh = 0;
+            var cr = starting_row[pass];  while(cr<h) {  cr+=ri;  sh++;  }
+            var cc = starting_col[pass];  while(cc<w) {  cc+=ci;  sw++;  }
+            var bpll = Math.ceil(sw*bpp/8);
+            _filterZero(data, out, di, sw, sh);
+
+            var y=0, row = starting_row[pass];
+            while(row<h)
+            {
+                var col = starting_col[pass];
+                var cdi = (di+y*bpll)<<3;
+
+                while(col<w)
+                {
+                    if(bpp==1) {
+                        var val = data[cdi>>3];  val = (val>>(7-(cdi&7)))&1;
+                        img[row*bpl + (col>>3)] |= (val << (7-((col&7)<<0)));
+                    }
+                    if(bpp==2) {
+                        var val = data[cdi>>3];  val = (val>>(6-(cdi&7)))&3;
+                        img[row*bpl + (col>>2)] |= (val << (6-((col&3)<<1)));
+                    }
+                    if(bpp==4) {
+                        var val = data[cdi>>3];  val = (val>>(4-(cdi&7)))&15;
+                        img[row*bpl + (col>>1)] |= (val << (4-((col&1)<<2)));
+                    }
+                    if(bpp>=8) {
+                        var ii = row*bpl+col*cbpp;
+                        for(var j=0; j<cbpp; j++) img[ii+j] = data[(cdi>>3)+j];
+                    }
+                    cdi+=bpp;  col+=ci;
+                }
+                y++;  row += ri;
+            }
+            if(sw*sh!=0) di += sh * (1 + bpll);
+            pass = pass + 1;
+        }
+        return img;
+    }
+
+    function _getBPP(out) {
+        var noc = [1,null,3,1,2,null,4][out.ctype];
+        return noc * out.depth;
+    }
+
+    function _filterZero(data, out, off, w, h)
+    {
+        var bpp = _getBPP(out), bpl = Math.ceil(w*bpp/8);
+        bpp = Math.ceil(bpp/8);
+        
+        var i,di, type=data[off], x=0;
+        
+        if(type>1) data[off]=[0,0,1][type-2];  
+        if(type==3) for(x=bpp; x<bpl; x++) data[x+1] = (data[x+1] + (data[x+1-bpp]>>>1) )&255;
+
+        for(var y=0; y<h; y++)  {
+            i = off+y*bpl; di = i+y+1;
+            type = data[di-1]; x=0;
+
+            if     (type==0)   for(; x<bpl; x++) data[i+x] = data[di+x];
+            else if(type==1) { for(; x<bpp; x++) data[i+x] = data[di+x];
+                               for(; x<bpl; x++) data[i+x] = (data[di+x] + data[i+x-bpp]);  }
+            else if(type==2) { for(; x<bpl; x++) data[i+x] = (data[di+x] + data[i+x-bpl]);  }
+            else if(type==3) { for(; x<bpp; x++) data[i+x] = (data[di+x] + ( data[i+x-bpl]>>>1));
+                               for(; x<bpl; x++) data[i+x] = (data[di+x] + ((data[i+x-bpl]+data[i+x-bpp])>>>1) );  }
+            else             { for(; x<bpp; x++) data[i+x] = (data[di+x] + _paeth(0, data[i+x-bpl], 0));
+                               for(; x<bpl; x++) data[i+x] = (data[di+x] + _paeth(data[i+x-bpp], data[i+x-bpl], data[i+x-bpp-bpl]));  }
+        }
+        return data;
+    }
+
+    function _paeth(a,b,c)
+    {
+        var p = a+b-c, pa = (p-a), pb = (p-b), pc = (p-c);
+        if (pa*pa <= pb*pb && pa*pa <= pc*pc)  return a;
+        else if (pb*pb <= pc*pc)  return b;
+        return c;
+    }
+
+    function _IHDR(data, offset, out)
+    {
+        out.width  = _bin.readUint(data, offset);  offset += 4;
+        out.height = _bin.readUint(data, offset);  offset += 4;
+        out.depth     = data[offset];  offset++;
+        out.ctype     = data[offset];  offset++;
+        out.compress  = data[offset];  offset++;
+        out.filter    = data[offset];  offset++;
+        out.interlace = data[offset];  offset++;
+    }
+
+    function _copyTile(sb, sw, sh, tb, tw, th, xoff, yoff, mode)
+    {
+        var w = Math.min(sw,tw), h = Math.min(sh,th);
+        var si=0, ti=0;
+        for(var y=0; y<h; y++)
+            for(var x=0; x<w; x++)
+            {
+                if(xoff>=0 && yoff>=0) {  si = (y*sw+x)<<2;  ti = (( yoff+y)*tw+xoff+x)<<2;  }
+                else                   {  si = ((-yoff+y)*sw-xoff+x)<<2;  ti = (y*tw+x)<<2;  }
+                
+                if     (mode==0) {  tb[ti] = sb[si];  tb[ti+1] = sb[si+1];  tb[ti+2] = sb[si+2];  tb[ti+3] = sb[si+3];  }
+                else if(mode==1) {
+                    var fa = sb[si+3]*(1/255), fr=sb[si]*fa, fg=sb[si+1]*fa, fb=sb[si+2]*fa; 
+                    var ba = tb[ti+3]*(1/255), br=tb[ti]*ba, bg=tb[ti+1]*ba, bb=tb[ti+2]*ba; 
+                    
+                    var ifa=1-fa, oa = fa+ba*ifa, ioa = (oa==0?0:1/oa);
+                    tb[ti+3] = 255*oa;  
+                    tb[ti+0] = (fr+br*ifa)*ioa;  
+                    tb[ti+1] = (fg+bg*ifa)*ioa;   
+                    tb[ti+2] = (fb+bb*ifa)*ioa;  
+                }
+                else if(mode==2){	// copy only differences, otherwise zero
+                    var fa = sb[si+3], fr=sb[si], fg=sb[si+1], fb=sb[si+2]; 
+                    var ba = tb[ti+3], br=tb[ti], bg=tb[ti+1], bb=tb[ti+2]; 
+                    if(fa==ba && fr==br && fg==bg && fb==bb) {  tb[ti]=0;  tb[ti+1]=0;  tb[ti+2]=0;  tb[ti+3]=0;  }
+                    else {  tb[ti]=fr;  tb[ti+1]=fg;  tb[ti+2]=fb;  tb[ti+3]=fa;  }
+                }
+                else if(mode==3){	// check if can be blended
+                    var fa = sb[si+3], fr=sb[si], fg=sb[si+1], fb=sb[si+2]; 
+                    var ba = tb[ti+3], br=tb[ti], bg=tb[ti+1], bb=tb[ti+2]; 
+                    if(fa==ba && fr==br && fg==bg && fb==bb) continue;
+                    if(fa<220 && ba>20) return false;
+                }
+            }
+        return true;
+    }
+    
+    return {
+        decode:decode,
+        toRGBA8:toRGBA8,
+        _paeth:_paeth,
+        _copyTile:_copyTile,
+        _bin:_bin
+    };
+})();
+// ================= UPNG 解码器结束 =================
+
+(function(){
+    // DOM 元素
+    const stegoImageUpload = document.getElementById('stegoImageUpload');
+    const imgPreviewContainer = document.getElementById('imgPreviewContainer');
+    const extractOffset = document.getElementById('extractOffset');
+    const maxExtractBytesInput = document.getElementById('maxExtractBytes');
+    const extractBtn = document.getElementById('extractBtn');
+    const extractInfo = document.getElementById('extractInfo');
+    const progressContainer = document.getElementById('progressContainer');
+    const extractProgress = document.getElementById('extractProgress');
+    const progressText = document.getElementById('progressText');
+    const orderListPanel = document.getElementById('orderListPanel');
+    const orderCountBadge = document.getElementById('orderCountBadge');
+    const addPixelRowBtn = document.getElementById('addPixelRowBtn');
+    const resetOrderBtn = document.getElementById('resetOrderBtn');
+    const capacityInfo = document.getElementById('capacityInfo');
+    const resultArea = document.getElementById('resultArea');
+    const extractedSizeSpan = document.getElementById('extractedSize');
+    const extractLimitStatus = document.getElementById('extractLimitStatus');
+    const saveAsFileBtn = document.getElementById('saveAsFileBtn');
+    const loadModeInfo = document.getElementById('loadModeInfo');
+    const binaryResultDiv = document.getElementById('binaryResult');
+    const hexResultDiv = document.getElementById('hexResult');
+    const utf8ResultDiv = document.getElementById('utf8Result');
+    const truncationWarningDiv = document.getElementById('previewTruncationWarning');
+
+    // 查找相关 DOM
+    const searchKeyword = document.getElementById('searchKeyword');
+    const searchView = document.getElementById('searchView');
+    const searchBtn = document.getElementById('searchBtn');
+    const clearHighlightBtn = document.getElementById('clearHighlightBtn');
+    const prevMatchBtn = document.getElementById('prevMatchBtn');
+    const nextMatchBtn = document.getElementById('nextMatchBtn');
+    const matchCounter = document.getElementById('matchCounter');
+
+    // 全局状态
+    let currentImageData = null;
+    let currentWidth = 0, currentHeight = 0;
+    let worker = null;
+    let extractedBytes = null;          // 最终完整字节数组
+    let accumulatedChunks = [];          // 存储分块字节数组
+    let totalExtractedBytes = 0;
+    
+    // 顺序配置
+    let embedSequence = [];
+    let pixelRows = [];
+    
+    // 查找高亮相关存储
+    let rawBinaryLines = [];
+    let rawHexLines = [];
+    let rawUtf8Lines = [];
+    let currentMatchRanges = [];
+    let currentMatchIndex = -1;
+    let currentSearchViewMode = "binary";
+    let lastSearchKeyword = "";
+    
+    // 最大提取限制 500MB (安全)
+    const MAX_EXTRACT_BYTES = 500 * 1024 * 1024;
+    const MAX_PREVIEW_BYTES = 1 * 1024 * 1024;   // 预览最大1MB，超出时截断提示
+    
+    function escapeHtml(str) {
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+    
+    // 格式化函数 (保留原样)
+    function formatBinaryFull(bytes) {
+        if (!bytes || bytes.length === 0) return "(无数据)";
+        const lines = [];
+        const bytesPerLine = 16;
+        for (let i = 0; i < bytes.length; i += bytesPerLine) {
+            const offset = i;
+            const chunk = bytes.slice(i, Math.min(i + bytesPerLine, bytes.length));
+            const hexOffset = offset.toString(16).toUpperCase().padStart(8, '0');
+            const binParts = [];
+            for (let j = 0; j < chunk.length; j++) {
+                binParts.push(chunk[j].toString(2).padStart(8, '0'));
+            }
+            const binLine = binParts.join(' ');
+            lines.push(`${hexOffset}  ${binLine}`);
+        }
+        return lines.join('\n');
+    }
+    
+    function formatHexFull(bytes) {
+        if (!bytes || bytes.length === 0) return "(无数据)";
+        const lines = [];
+        const bytesPerLine = 16;
+        for (let i = 0; i < bytes.length; i += bytesPerLine) {
+            const offset = i;
+            const chunk = bytes.slice(i, Math.min(i + bytesPerLine, bytes.length));
+            const hexOffset = offset.toString(16).toUpperCase().padStart(8, '0');
+            const hexParts = [];
+            for (let j = 0; j < chunk.length; j++) {
+                hexParts.push(chunk[j].toString(16).padStart(2, '0').toUpperCase());
+            }
+            while (hexParts.length < bytesPerLine) hexParts.push('  ');
+            const hexLine = hexParts.join(' ');
+            lines.push(`${hexOffset}  ${hexLine}`);
+        }
+        return lines.join('\n');
+    }
+    
+    function formatUtf8WithOffset(bytes, rowSize = 16) {
+        if (!bytes || bytes.length === 0) return "(无数据)";
+        const lines = [];
+        const decoder = new TextDecoder('utf-8', { fatal: false });
+        for (let i = 0; i < bytes.length; i += rowSize) {
+            const offset = i;
+            const chunk = bytes.slice(i, Math.min(i + rowSize, bytes.length));
+            let decoded = "";
+            try {
+                decoded = decoder.decode(chunk);
+            } catch(e) {
+                decoded = "�";
+            }
+            let displayText = "";
+            for (let ch of decoded) {
+                const code = ch.charCodeAt(0);
+                if (code < 0x20 || code === 0x7F) displayText += '·';
+                else displayText += ch;
+            }
+            const hexOffset = offset.toString(16).toUpperCase().padStart(8, '0');
+            lines.push(`${hexOffset}  ${displayText}`);
+        }
+        return lines.join('\n');
+    }
+    
+    // =============== 查找高亮核心函数 (参照第二个文件) ===============
+    function storeRawLinesFromContainer(container, linesArray) {
+        if (!container) return;
+        const pre = container.querySelector('pre');
+        if (!pre) return;
+        const text = pre.innerText;
+        const rows = text.split('\n');
+        linesArray.length = 0;
+        for (let row of rows) {
+            if (row.trim() === "") continue;
+            const match = row.match(/^([0-9A-Fa-f]+)\s+(.*)$/);
+            if (match) {
+                linesArray.push({ offsetHex: match[1], dataStr: match[2] });
+            } else {
+                linesArray.push({ offsetHex: "", dataStr: row });
+            }
+        }
+    }
+    
+    function rebuildViewFromLines(container, lines) {
+        if (!lines.length) { container.innerHTML = "<pre style='margin:0'>—</pre>"; return; }
+        const html = lines.map(line => {
+            return `${escapeHtml(line.offsetHex)}  ${escapeHtml(line.dataStr)}`;
+        }).join('\n');
+        container.innerHTML = `<pre style="margin:0;font-family:inherit">${html}</pre>`;
+    }
+    
+    function highlightInView(container, rawLines, mode, keywordRaw) {
+        if (!rawLines.length || !keywordRaw.trim()) {
+            rebuildViewFromLines(container, rawLines);
+            return [];
+        }
+        let keyword = keywordRaw;
+        if (mode === "binary") {
+            keyword = keyword.replace(/\s/g, '');
+            if (!/^[01]+$/.test(keyword)) return [];
+        } else if (mode === "hex") {
+            keyword = keyword.replace(/\s/g, '').toUpperCase();
+            if (!/^[0-9A-F]+$/.test(keyword)) return [];
+        } else {
+            // utf8 保持原样
+        }
+        
+        const matches = [];
+        const newHtmlLines = [];
+        
+        for (let li = 0; li < rawLines.length; li++) {
+            const line = rawLines[li];
+            let dataPart = line.dataStr;
+            let highlightedData = "";
+            let cursor = 0;
+            let matchPositions = [];
+            
+            if (mode === "binary") {
+                const rawNoSpace = dataPart.replace(/\s/g, '');
+                let kwLen = keyword.length;
+                let pos = 0;
+                while ((pos = rawNoSpace.indexOf(keyword, pos)) !== -1) {
+                    let origStart = 0, origEnd = 0, charCount = 0;
+                    for (let i = 0; i < dataPart.length; i++) {
+                        if (dataPart[i] !== ' ') {
+                            if (charCount === pos) origStart = i;
+                            if (charCount === pos + kwLen - 1) { origEnd = i; break; }
+                            charCount++;
+                        }
+                    }
+                    if (origEnd === 0 && kwLen === 1) origEnd = origStart;
+                    let endIdx = origEnd + 1;
+                    while (endIdx < dataPart.length && dataPart[endIdx] === ' ') endIdx++;
+                    matchPositions.push({ start: origStart, end: endIdx });
+                    pos += kwLen;
+                }
+            } 
+            else if (mode === "hex") {
+                const rawNoSpace = dataPart.replace(/\s/g, '');
+                let kwLen = keyword.length;
+                let pos = 0;
+                while ((pos = rawNoSpace.indexOf(keyword, pos)) !== -1) {
+                    let origStart = 0, origEnd = 0, charCount = 0;
+                    for (let i = 0; i < dataPart.length; i++) {
+                        if (dataPart[i] !== ' ') {
+                            if (charCount === pos) origStart = i;
+                            if (charCount === pos + kwLen - 1) { origEnd = i; break; }
+                            charCount++;
+                        }
+                    }
+                    if (origEnd === 0 && kwLen === 1) origEnd = origStart;
+                    let endIdx = origEnd + 1;
+                    while (endIdx < dataPart.length && dataPart[endIdx] === ' ') endIdx++;
+                    matchPositions.push({ start: origStart, end: endIdx });
+                    pos += kwLen;
+                }
+            } 
+            else { // utf8 文本匹配 (大小写不敏感)
+                const lowerData = dataPart.toLowerCase();
+                const lowerKw = keyword.toLowerCase();
+                let pos = 0;
+                while ((pos = lowerData.indexOf(lowerKw, pos)) !== -1) {
+                    matchPositions.push({ start: pos, end: pos + keyword.length });
+                    pos += keyword.length;
+                }
+            }
+            
+            if (matchPositions.length) {
+                matchPositions.sort((a,b) => a.start - b.start);
+                let last = 0;
+                for (let mp of matchPositions) {
+                    highlightedData += escapeHtml(dataPart.slice(last, mp.start));
+                    highlightedData += `<mark class="search-highlight">${escapeHtml(dataPart.slice(mp.start, mp.end))}</mark>`;
+                    last = mp.end;
+                    matches.push({ lineIdx: li, startChar: mp.start, endChar: mp.end });
+                }
+                highlightedData += escapeHtml(dataPart.slice(last));
+            } else {
+                highlightedData = escapeHtml(dataPart);
+            }
+            newHtmlLines.push(`${escapeHtml(line.offsetHex)}  ${highlightedData}`);
+        }
+        
+        const finalHtml = newHtmlLines.join('\n');
+        container.innerHTML = `<pre style="margin:0;font-family:inherit">${finalHtml}</pre>`;
+        
+        // 收集所有 mark 元素用于导航
+        const marks = container.querySelectorAll('mark.search-highlight');
+        const ranges = [];
+        marks.forEach(mark => {
+            ranges.push({ element: mark, container });
+        });
+        return ranges;
+    }
+    
+    function clearAllHighlights() {
+        if (rawBinaryLines.length && binaryResultDiv) rebuildViewFromLines(binaryResultDiv, rawBinaryLines);
+        if (rawHexLines.length && hexResultDiv) rebuildViewFromLines(hexResultDiv, rawHexLines);
+        if (rawUtf8Lines.length && utf8ResultDiv) rebuildViewFromLines(utf8ResultDiv, rawUtf8Lines);
+        currentMatchRanges = [];
+        currentMatchIndex = -1;
+        matchCounter.innerText = "0 / 0";
+        lastSearchKeyword = "";
+    }
+    
+    function highlightCurrentMatch() {
+        if (!currentMatchRanges.length || currentMatchIndex < 0) return;
+        currentMatchRanges.forEach((r, i) => {
+            if (r.element) {
+                if (i === currentMatchIndex) r.element.classList.add('current');
+                else r.element.classList.remove('current');
+            }
+        });
+        matchCounter.innerText = `${currentMatchIndex+1} / ${currentMatchRanges.length}`;
+        if (currentMatchRanges[currentMatchIndex]?.element) {
+            currentMatchRanges[currentMatchIndex].element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+    
+    function performSearch() {
+        let keyword = searchKeyword.value.trim();
+        if (!keyword) {
+            clearAllHighlights();
+            return;
+        }
+        const view = searchView.value;
+        currentSearchViewMode = view;
+        lastSearchKeyword = keyword;
+        
+        let targetLines, targetContainer;
+        if (view === "binary") { targetLines = rawBinaryLines; targetContainer = binaryResultDiv; }
+        else if (view === "hex") { targetLines = rawHexLines; targetContainer = hexResultDiv; }
+        else { targetLines = rawUtf8Lines; targetContainer = utf8ResultDiv; }
+        
+        if (!targetLines.length) {
+            setInfo("当前视图无数据，请先提取数据", true);
+            return;
+        }
+        
+        // 清除其他视图高亮
+        if (view !== "binary") rebuildViewFromLines(binaryResultDiv, rawBinaryLines);
+        if (view !== "hex") rebuildViewFromLines(hexResultDiv, rawHexLines);
+        if (view !== "utf8") rebuildViewFromLines(utf8ResultDiv, rawUtf8Lines);
+        
+        let mode = view === "binary" ? "binary" : (view === "hex" ? "hex" : "utf8");
+        const matchElements = highlightInView(targetContainer, targetLines, mode, keyword);
+        
+        currentMatchRanges = matchElements.map((el, idx) => ({ idx, element: el.element, container: targetContainer }));
+        currentMatchIndex = currentMatchRanges.length > 0 ? 0 : -1;
+        matchCounter.innerText = currentMatchRanges.length ? `1 / ${currentMatchRanges.length}` : "0 / 0";
+        
+        if (currentMatchRanges.length) {
+            highlightCurrentMatch();
+            currentMatchRanges[0].element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+            setInfo(`未找到匹配: "${keyword}"`, false);
+        }
+    }
+    
+    function nextMatch() {
+        if (!currentMatchRanges.length) return;
+        currentMatchIndex = (currentMatchIndex + 1) % currentMatchRanges.length;
+        highlightCurrentMatch();
+    }
+    
+    function prevMatch() {
+        if (!currentMatchRanges.length) return;
+        currentMatchIndex = (currentMatchIndex - 1 + currentMatchRanges.length) % currentMatchRanges.length;
+        highlightCurrentMatch();
+    }
+    
+    function afterExtractStoreLines() {
+        storeRawLinesFromContainer(binaryResultDiv, rawBinaryLines);
+        storeRawLinesFromContainer(hexResultDiv, rawHexLines);
+        storeRawLinesFromContainer(utf8ResultDiv, rawUtf8Lines);
+        clearAllHighlights();
+        if (searchKeyword.value.trim()) performSearch();
+    }
+    // =============== 查找高亮结束 ===============
+    
+    function setInfo(msg, isError = false) {
+        extractInfo.innerHTML = isError ? `❌ ${msg}` : `ℹ️ ${msg}`;
+        extractInfo.style.background = isError ? "#fee2e2" : "#eef2ff";
+        extractInfo.style.color = isError ? "#991b1b" : "#1e293b";
+    }
+    
+    function showProgress(show, percent = 0, text = "") {
+        if (show) {
+            progressContainer.style.display = "block";
+            extractProgress.style.width = `${percent}%`;
+            progressText.innerText = text;
+        } else {
+            progressContainer.style.display = "none";
+        }
+    }
+    
+    function updateCapacityDisplay() {
+        if (!currentImageData) {
+            capacityInfo.innerHTML = "📊 未加载图像";
+            return;
+        }
+        const totalPixels = currentWidth * currentHeight;
+        const seqLen = embedSequence.length;
+        if (seqLen === 0) {
+            capacityInfo.innerHTML = `📊 图像 ${currentWidth}x${currentHeight} | 顺序为空，最大可提取 0 比特`;
+            return;
+        }
+        const maxBits = totalPixels * seqLen;
+        const maxBytes = Math.floor(maxBits / 8);
+        capacityInfo.innerHTML = `📊 图像 ${currentWidth}x${currentHeight} | 顺序长度 ${seqLen} | 理论最大 ${maxBytes.toLocaleString()} 字节`;
+    }
+    
+    function refreshOrderUI() {
+        if (!orderListPanel) return;
+        if (embedSequence.length === 0) {
+            orderListPanel.innerHTML = `<div style="color:#94a3b8; text-align:center;">暂无顺序，请点击上方复选框定义嵌入比特位顺序</div>`;
+            orderCountBadge.innerText = '0';
+            updateCapacityDisplay();
+            return;
+        }
+        orderCountBadge.innerText = embedSequence.length;
+        let html = '';
+        embedSequence.forEach((item, idx) => {
+            const chName = item.channelIdx === 0 ? 'R' : (item.channelIdx === 1 ? 'G' : (item.channelIdx === 2 ? 'B' : 'A'));
+            html += `
+                <div class="order-item">
+                    <span>#${idx+1} &nbsp; ${chName}  bit${item.bitPos}</span>
+                    <button class="del-order" data-index="${idx}">删除</button>
+                </div>
+            `;
+        });
+        orderListPanel.innerHTML = html;
+        document.querySelectorAll('.del-order').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(btn.getAttribute('data-index'), 10);
+                if (!isNaN(idx)) {
+                    embedSequence.splice(idx, 1);
+                    refreshOrderUI();
+                    setInfo(`已删除顺序第${idx+1}项，新顺序长度 ${embedSequence.length}`);
+                    resultArea.style.display = 'none';
+                    extractedBytes = null;
+                }
+            });
+        });
+        updateCapacityDisplay();
+        resultArea.style.display = 'none';
+        extractedBytes = null;
+    }
+    
+    function addToSequence(channelIdx, bitPos) {
+        embedSequence.push({ channelIdx, bitPos });
+        refreshOrderUI();
+        setInfo(`添加顺序: ${channelIdx === 0 ? 'R' : (channelIdx===1?'G':(channelIdx===2?'B':'A'))} bit${bitPos} , 当前顺序长度 ${embedSequence.length}`);
+        resultArea.style.display = 'none';
+        extractedBytes = null;
+    }
+    
+    function resetSequence() {
+        embedSequence = [];
+        refreshOrderUI();
+        setInfo("嵌入顺序已清空");
+        resultArea.style.display = 'none';
+        extractedBytes = null;
+    }
+    
+    function rebuildPixelTable() {
+        const container = document.getElementById('pixelTableContainer');
+        if (!container) return;
+        let html = `<table class="bit-matrix" style="width:100%;"><thead><tr><th>像素行</th><th>R (bit7~bit0)</th><th>G (bit7~bit0)</th><th>B (bit7~bit0)</th><th>A (Alpha bit7~bit0)</th></tr></thead><tbody>`;
+        for (let rowIdx = 0; rowIdx < pixelRows.length; rowIdx++) {
+            html += `<tr><td style="background:#eef2ff; font-weight:bold; text-align:center;">Pixel ${rowIdx}</td>`;
+            for (let ch = 0; ch < 4; ch++) {
+                html += `<td><div class="bit-check-group">`;
+                for (let bit = 7; bit >= 0; bit--) {
+                    html += `<label><input type="checkbox" class="seq-bit-check" data-row="${rowIdx}" data-channel="${ch}" data-bit="${bit}"> ${bit}</label>`;
+                }
+                html += `</div></td>`;
+            }
+            html += `</tr>`;
+        }
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+        document.querySelectorAll('.seq-bit-check').forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                if (cb.checked) {
+                    const channel = parseInt(cb.getAttribute('data-channel'), 10);
+                    const bit = parseInt(cb.getAttribute('data-bit'), 10);
+                    addToSequence(channel, bit);
+                    cb.checked = false;
+                }
+            });
+        });
+    }
+    
+    function addPixelRow() {
+        pixelRows.push(pixelRows.length);
+        rebuildPixelTable();
+        setInfo(`已添加像素行 ${pixelRows.length-1}，可以点击该行中的位加入顺序`);
+    }
+    
+    async function loadImageToImageData(file) {
+        const fileType = file.type;
+        const isPng = fileType === 'image/png';
+        
+        if (isPng && window.UPNG) {
+            loadModeInfo.innerHTML = "✅ PNG 检测到，使用 UPNG.js 直接解码（无伽马校正，像素绝对精确）";
+            loadModeInfo.style.background = "#dcfce7";
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const decoded = UPNG.decode(arrayBuffer);
+                const rgbaBuffers = UPNG.toRGBA8(decoded);
+                if (!rgbaBuffers || rgbaBuffers.length === 0) {
+                    throw new Error("无法获取 RGBA 像素数据");
+                }
+                const rgbaData = new Uint8ClampedArray(rgbaBuffers[0]);
+                const width = decoded.width;
+                const height = decoded.height;
+                const imageData = new ImageData(rgbaData, width, height);
+                return { imageData, width, height };
+            } catch (err) {
+                console.error("UPNG解码失败，回退到canvas模式", err);
+                loadModeInfo.innerHTML = "⚠️ UPNG解码失败，回退到canvas模式（可能发生伽马校正）";
+                loadModeInfo.style.background = "#fef3c7";
+                return loadWithCanvas(file);
+            }
+        } else {
+            if (!isPng) {
+                loadModeInfo.innerHTML = "⚠️ 当前文件非PNG格式，使用canvas加载（可能发生伽马校正，建议使用PNG确保像素精确）";
+                loadModeInfo.style.background = "#fef3c7";
+            } else {
+                loadModeInfo.innerHTML = "⚠️ UPNG库未加载，使用canvas加载PNG（可能发生伽马校正）";
+                loadModeInfo.style.background = "#fef3c7";
+            }
+            return loadWithCanvas(file);
+        }
+    }
+    
+    function loadWithCanvas(file) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                try {
+                    const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                    resolve({ imageData, width: img.width, height: img.height });
+                } catch(e) { reject(e); }
+                URL.revokeObjectURL(img.src);
+            };
+            img.onerror = () => reject(new Error("图像加载失败"));
+            img.src = URL.createObjectURL(file);
+        });
+    }
+    
+    function updatePreview(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            imgPreviewContainer.innerHTML = `<img src="${e.target.result}" class="img-preview" alt="预览">`;
+        };
+        reader.readAsDataURL(file);
+    }
+    
+    function createChunkedExtractWorker() {
+        const workerCode = `
+            self.onmessage = function(e) {
+                const { imageData, embedSequence, offsetBits, width, height, chunkByteSize, maxExtractBytes } = e.data;
+                try {
+                    const totalPixels = width * height;
+                    const seqLen = embedSequence.length;
+                    if (seqLen === 0) throw new Error("嵌入顺序为空");
+                    const totalSlots = totalPixels * seqLen;
+                    if (offsetBits > totalSlots) throw new Error("偏移量超过总槽位数");
+                    const estimatedBits = totalSlots - offsetBits;
+                    if (estimatedBits <= 0) throw new Error("偏移量过大，无有效数据");
+                    
+                    let bitBuffer = 0;
+                    let bitCount = 0;
+                    let byteBuffer = [];
+                    let totalBytesSent = 0;
+                    const targetChunkBytes = chunkByteSize;
+                    let lastProgress = 0;
+                    
+                    let maxBytesLimit = (maxExtractBytes > 0) ? maxExtractBytes : Infinity;
+                    let stopFlag = false;
+                    
+                    let globalSlot = 0;
+                    outerLoop:
+                    for (let pixel = 0; pixel < totalPixels; pixel++) {
+                        const base = pixel * 4;
+                        for (let seqIdx = 0; seqIdx < seqLen; seqIdx++) {
+                            const { channelIdx, bitPos } = embedSequence[seqIdx];
+                            if (globalSlot >= offsetBits) {
+                                const pixelValue = imageData[base + channelIdx];
+                                const bit = (pixelValue >> bitPos) & 1;
+                                if (bit === 1) bitBuffer |= (1 << bitCount);
+                                bitCount++;
+                                if (bitCount === 8) {
+                                    byteBuffer.push(bitBuffer);
+                                    totalBytesSent++;
+                                    if (totalBytesSent >= maxBytesLimit) {
+                                        stopFlag = true;
+                                        if (byteBuffer.length > 0) {
+                                            self.postMessage({ type: 'chunk', data: new Uint8Array(byteBuffer) });
+                                            byteBuffer = [];
+                                        }
+                                        break outerLoop;
+                                    }
+                                    bitBuffer = 0;
+                                    bitCount = 0;
+                                    if (byteBuffer.length >= targetChunkBytes) {
+                                        self.postMessage({ type: 'chunk', data: new Uint8Array(byteBuffer) });
+                                        byteBuffer = [];
+                                    }
+                                }
+                            }
+                            globalSlot++;
+                            if (globalSlot % 200000 === 0 && !stopFlag) {
+                                const progressPercent = (globalSlot / totalSlots) * 100;
+                                if (progressPercent - lastProgress >= 2) {
+                                    lastProgress = progressPercent;
+                                    self.postMessage({ type: 'progress', percent: progressPercent, text: \`提取中... \${Math.round(progressPercent)}% (\${globalSlot.toLocaleString()}/\${totalSlots.toLocaleString()} slots)\` });
+                                }
+                            }
+                        }
+                        if (stopFlag) break;
+                    }
+                    if (!stopFlag && byteBuffer.length > 0) {
+                        self.postMessage({ type: 'chunk', data: new Uint8Array(byteBuffer) });
+                    }
+                    self.postMessage({ type: 'complete', totalBytes: totalBytesSent, reachedLimit: stopFlag });
+                } catch(err) {
+                    self.postMessage({ type: 'error', message: err.message });
+                }
+            };
+        `;
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        return new Worker(URL.createObjectURL(blob));
+    }
+    
+    async function performExtract() {
+        if (!currentImageData) {
+            setInfo("请先上传含隐写信息的图像", true);
+            return;
+        }
+        if (embedSequence.length === 0) {
+            setInfo("请先通过复选框定义嵌入顺序 (必须与嵌入时完全一致)", true);
+            return;
+        }
+        const offset = parseInt(extractOffset.value, 10);
+        if (isNaN(offset) || offset < 0) {
+            setInfo("偏移量无效", true);
+            return;
+        }
+        
+        let maxBytes = parseInt(maxExtractBytesInput.value, 10);
+        if (isNaN(maxBytes) || maxBytes < 0) maxBytes = 0;
+        if (maxBytes > MAX_EXTRACT_BYTES) {
+            setInfo(`提取字节数不能超过 ${MAX_EXTRACT_BYTES/1024/1024}MB，已自动限制`, true);
+            maxBytes = MAX_EXTRACT_BYTES;
+            maxExtractBytesInput.value = maxBytes;
+        }
+        
+        const totalPixels = currentWidth * currentHeight;
+        const maxSlots = totalPixels * embedSequence.length;
+        if (offset > maxSlots) {
+            setInfo(`偏移量 ${offset} 超过最大槽位数 ${maxSlots.toLocaleString()}，无法提取任何数据`, true);
+            return;
+        }
+        
+        accumulatedChunks = [];
+        totalExtractedBytes = 0;
+        extractedBytes = null;
+        resultArea.style.display = 'none';
+        extractLimitStatus.innerText = '';
+        
+        if (worker) worker.terminate();
+        const CHUNK_SIZE_BYTES = 1024 * 1024;  // 1MB chunk
+        worker = createChunkedExtractWorker();
+        
+        showProgress(true, 0, "分块提取启动...");
+        setInfo(`⏳ 分块提取中，顺序长度 ${embedSequence.length}, 偏移 ${offset}, 最大提取字节 ${maxBytes === 0 ? '全部' : maxBytes.toLocaleString()}`);
+        
+        return new Promise((resolve, reject) => {
+            let isResolved = false;
+            let reachedLimitFlag = false;
+            worker.onmessage = (msgEv) => {
+                const msg = msgEv.data;
+                if (msg.type === 'progress') {
+                    extractProgress.style.width = `${msg.percent}%`;
+                    progressText.innerText = msg.text;
+                } else if (msg.type === 'chunk') {
+                    const chunkBytes = msg.data;
+                    if (chunkBytes && chunkBytes.length > 0) {
+                        totalExtractedBytes += chunkBytes.length;
+                        if (totalExtractedBytes > MAX_EXTRACT_BYTES) {
+                            worker.terminate();
+                            worker = null;
+                            showProgress(false);
+                            setInfo(`❌ 提取数据超过限制 (${MAX_EXTRACT_BYTES/1024/1024}MB)，可能顺序或偏移量有误`, true);
+                            reject(new Error("超出最大提取限制"));
+                            return;
+                        }
+                        accumulatedChunks.push(chunkBytes);
+                        progressText.innerText = `已提取 ${totalExtractedBytes.toLocaleString()} 字节...`;
+                    }
+                } else if (msg.type === 'complete') {
+                    if (isResolved) return;
+                    isResolved = true;
+                    reachedLimitFlag = msg.reachedLimit === true;
+                    try {
+                        if (accumulatedChunks.length === 0 && totalExtractedBytes === 0) {
+                            throw new Error("未提取到任何数据，请检查偏移量或顺序是否正确");
+                        }
+                        const totalLength = accumulatedChunks.reduce((sum, arr) => sum + arr.length, 0);
+                        const finalBytes = new Uint8Array(totalLength);
+                        let pos = 0;
+                        for (const chunk of accumulatedChunks) {
+                            finalBytes.set(chunk, pos);
+                            pos += chunk.length;
+                        }
+                        extractedBytes = finalBytes;
+                        showProgress(false);
+                        resultArea.style.display = 'block';
+                        extractedSizeSpan.innerText = extractedBytes.length.toLocaleString();
+                        
+                        if (maxBytes > 0 && extractedBytes.length >= maxBytes && reachedLimitFlag) {
+                            extractLimitStatus.innerText = `(已达到指定限制 ${maxBytes.toLocaleString()} 字节)`;
+                        } else if (maxBytes > 0 && extractedBytes.length < maxBytes) {
+                            extractLimitStatus.innerText = `(实际可用数据不足，共提取全部可用 ${extractedBytes.length.toLocaleString()} 字节)`;
+                        } else {
+                            extractLimitStatus.innerText = `(全部可用数据)`;
+                        }
+                        
+                        displayExtractedData(extractedBytes, reachedLimitFlag, maxBytes);
+                        setInfo(`✅ 提取完成！共提取 ${extractedBytes.length.toLocaleString()} 字节。${(maxBytes>0 && extractedBytes.length>=maxBytes && reachedLimitFlag) ? `已达到用户设定的 ${maxBytes.toLocaleString()} 字节限制。` : ''}`);
+                        resolve(true);
+                    } catch(err) {
+                        showProgress(false);
+                        reject(new Error(`合并数据失败: ${err.message}`));
+                    } finally {
+                        worker.terminate();
+                        worker = null;
+                    }
+                } else if (msg.type === 'error') {
+                    if (isResolved) return;
+                    isResolved = true;
+                    showProgress(false);
+                    reject(new Error(msg.message));
+                    worker.terminate();
+                    worker = null;
+                }
+            };
+            worker.onerror = (err) => {
+                if (isResolved) return;
+                isResolved = true;
+                showProgress(false);
+                reject(new Error("Worker内部错误: " + err.message));
+                worker.terminate();
+                worker = null;
+            };
+            const imageDataArray = currentImageData.data.slice();
+            worker.postMessage({
+                imageData: imageDataArray,
+                embedSequence: embedSequence,
+                offsetBits: offset,
+                width: currentWidth,
+                height: currentHeight,
+                chunkByteSize: CHUNK_SIZE_BYTES,
+                maxExtractBytes: maxBytes
+            }, [imageDataArray.buffer]);
+        });
+    }
+    
+    function displayExtractedData(dataBytes, isLimitReached, maxLimitBytes) {
+        if (!dataBytes || dataBytes.length === 0) {
+            binaryResultDiv.innerHTML = '<pre>—</pre>';
+            hexResultDiv.innerHTML = '<pre>—</pre>';
+            utf8ResultDiv.innerHTML = '<pre>—</pre>';
+            truncationWarningDiv.style.display = 'none';
+            afterExtractStoreLines();
+            return;
+        }
+        let previewBytes = dataBytes;
+        let isTruncated = false;
+        if (dataBytes.length > MAX_PREVIEW_BYTES) {
+            previewBytes = dataBytes.slice(0, MAX_PREVIEW_BYTES);
+            isTruncated = true;
+        }
+        const binaryStr = formatBinaryFull(previewBytes);
+        const hexStr = formatHexFull(previewBytes);
+        const utf8Str = formatUtf8WithOffset(previewBytes, 16);
+        binaryResultDiv.innerHTML = `<pre>${escapeHtml(binaryStr)}</pre>`;
+        hexResultDiv.innerHTML = `<pre>${escapeHtml(hexStr)}</pre>`;
+        utf8ResultDiv.innerHTML = `<pre>${escapeHtml(utf8Str)}</pre>`;
+        
+        if (isTruncated) {
+            truncationWarningDiv.style.display = 'block';
+            truncationWarningDiv.innerHTML = `⚠️ 提取数据共 ${dataBytes.length.toLocaleString()} 字节，预览仅显示前 ${MAX_PREVIEW_BYTES.toLocaleString()} 字节。完整数据可点击“保存为文件”下载。`;
+        } else {
+            truncationWarningDiv.style.display = 'none';
+        }
+        afterExtractStoreLines();
+    }
+    
+    async function onExtractClick() {
+        try {
+            extractBtn.disabled = true;
+            await performExtract();
+        } catch(err) {
+            setInfo(`提取失败: ${err.message}`, true);
+            resultArea.style.display = 'none';
+            extractedBytes = null;
+        } finally {
+            extractBtn.disabled = false;
+        }
+    }
+    
+    function saveExtractedAsFile() {
+        if (!extractedBytes || extractedBytes.length === 0) {
+            setInfo("没有可保存的数据，请先提取", true);
+            return;
+        }
+        const blob = new Blob([extractedBytes], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "extracted_data.bin";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setInfo(`文件已下载: extracted_data.bin (${extractedBytes.length.toLocaleString()} 字节)`);
+    }
+    
+    async function onImageSelected(file) {
+        if (!file) return;
+        updatePreview(file);
+        try {
+            const { imageData, width, height } = await loadImageToImageData(file);
+            currentImageData = imageData;
+            currentWidth = width;
+            currentHeight = height;
+            setInfo(`图像加载成功: ${width}x${height}, 总像素 ${(width*height).toLocaleString()}`);
+            updateCapacityDisplay();
+            resultArea.style.display = 'none';
+            extractedBytes = null;
+            accumulatedChunks = [];
+            clearAllHighlights();
+        } catch(err) {
+            setInfo(`图像加载失败: ${err.message}`, true);
+            currentImageData = null;
+            imgPreviewContainer.innerHTML = '';
+            resultArea.style.display = 'none';
+            loadModeInfo.innerHTML = "❌ 加载失败，请重试或更换图像";
+        }
+    }
+    
+    function initPixelRows() {
+        pixelRows = [0];
+        rebuildPixelTable();
+    }
+    
+    // 事件绑定
+    stegoImageUpload.addEventListener('change', (e) => { if(e.target.files[0]) onImageSelected(e.target.files[0]); });
+    extractBtn.addEventListener('click', onExtractClick);
+    addPixelRowBtn.addEventListener('click', addPixelRow);
+    resetOrderBtn.addEventListener('click', resetSequence);
+    saveAsFileBtn.addEventListener('click', saveExtractedAsFile);
+    extractOffset.addEventListener('input', () => {
+        resultArea.style.display = 'none';
+        extractedBytes = null;
+        setInfo("偏移量已更改，请重新提取");
+        clearAllHighlights();
+    });
+    maxExtractBytesInput.addEventListener('input', () => {
+        resultArea.style.display = 'none';
+        extractedBytes = null;
+        setInfo("最大提取字节数已更改，请重新提取");
+        clearAllHighlights();
+    });
+    
+    // 查找事件绑定
+    searchBtn.addEventListener('click', performSearch);
+    clearHighlightBtn.addEventListener('click', () => { clearAllHighlights(); setInfo("已清除高亮", false); });
+    prevMatchBtn.addEventListener('click', prevMatch);
+    nextMatchBtn.addEventListener('click', nextMatch);
+    
+    initPixelRows();
+    setInfo("就绪，请上传图像并定义与嵌入时完全相同的顺序和偏移量，支持限制提取字节数（0表示全部）。提取后自动展示二进制/十六进制/UTF-8预览，支持内容查找高亮。");
+})();
+</script>
+</body>
+</html>
