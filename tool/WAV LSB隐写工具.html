@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>WAV LSB隐写工具 · 自定义位顺序嵌入</title>
+    <!-- pako 保留但未使用，UPNG 仅保留但不调用，此处只用于占位 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            margin: 0;
+            padding: 24px 20px;
+            color: #1e2a3a;
+        }
+        .container { max-width: 1600px; margin: 0 auto; }
+        .card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+            padding: 24px 28px;
+            margin-bottom: 28px;
+        }
+        h1 {
+            font-size: 1.9rem;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #1e3c72, #2b4c7c);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .sub {
+            color: #5a6e7c;
+            border-left: 4px solid #3b82f6;
+            padding-left: 16px;
+            margin-bottom: 24px;
+            font-size: 0.95rem;
+        }
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        .control-group {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 16px 20px;
+            flex: 1;
+            min-width: 220px;
+            border: 1px solid #e2e8f0;
+        }
+        .control-group label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            color: #0f3b5c;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid #cbd5e1;
+            background: white;
+            font-size: 0.9rem;
+        }
+        textarea {
+            font-family: monospace;
+            resize: vertical;
+        }
+        button {
+            background: #1e4a76;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 40px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 0.9rem;
+        }
+        button.primary { background: #0f3b5c; }
+        button.primary:hover { background: #1e4a76; transform: translateY(-1px); }
+        button.secondary { background: #2c6e9e; }
+        button.warning { background: #b45309; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .info-bar {
+            background: #eef2ff;
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            margin: 16px 0;
+            word-break: break-all;
+        }
+        .img-preview {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 16px;
+            margin-top: 12px;
+            border: 1px solid #ddd;
+        }
+        .file-input-label {
+            background: #e2e8f0;
+            padding: 8px 12px;
+            border-radius: 30px;
+            display: inline-block;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .warning-note {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            margin-top: 8px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: #3b82f6;
+            transition: width 0.2s;
+        }
+        .button-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .sequence-config {
+            background: #fefce8;
+            border-radius: 20px;
+            padding: 16px;
+            margin-top: 10px;
+            border: 1px solid #e2e8f0;
+        }
+        .bit-check-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+            margin: 12px 0;
+        }
+        .bit-check-group label {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: 0.1s;
+        }
+        .bit-check-group label:hover { background: #e2e8f0; }
+        .bit-check-group input {
+            width: auto;
+            margin: 0;
+            transform: scale(0.8);
+        }
+        .order-list {
+            background: #0f172a;
+            color: #e2e8f0;
+            border-radius: 16px;
+            padding: 12px;
+            max-height: 180px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.8rem;
+        }
+        .order-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 8px;
+            border-bottom: 1px solid #334155;
+        }
+        .order-item span { font-weight: 500; }
+        .del-order {
+            background: #b91c1c;
+            border: none;
+            padding: 2px 8px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            cursor: pointer;
+        }
+        .badge {
+            background: #3b82f6;
+            border-radius: 30px;
+            padding: 2px 8px;
+            font-size: 0.7rem;
+        }
+        footer {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #5c6f87;
+            margin-top: 30px;
+        }
+        @media (max-width: 700px) {
+            .card { padding: 16px; }
+            .bit-check-group { gap: 3px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <h1>🎵 WAV LSB 隐写工具 · 自定义比特位顺序</h1>
+        <div class="sub">🎛️ 点击复选框自定义嵌入顺序 · 支持 PCM (8/16/24/32位) 及 32位浮点 · 偏移量跳过前N个槽位</div>
+
+        <!-- 文件上传区 -->
+        <div class="flex-row" style="margin-bottom: 20px;">
+            <div style="flex:2">
+                <label>📁 载体音频 (WAV)</label>
+                <input type="file" id="audioUpload" accept=".wav, .wave, audio/wav, audio/wave">
+                <div id="audioPreviewContainer" style="margin-top: 10px;"></div>
+                <div id="audioInfoDisplay" class="warning-note" style="margin-top:8px; background:#e0f2fe;">
+                    ℹ️ 等待WAV文件加载…
+                </div>
+            </div>
+        </div>
+
+        <!-- 位顺序自定义区 (根据音频位深度动态生成) -->
+        <div class="sequence-config">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                <label style="font-weight: bold;">🧩 嵌入顺序定义：点击下方复选框添加至右侧序列</label>
+                <div>
+                    <button id="resetOrderBtn" type="button" style="background: #6c757d; padding: 6px 12px;">🗑️ 清空顺序</button>
+                </div>
+            </div>
+            <div id="bitCheckContainer" class="bit-check-group">
+                <!-- 动态生成位复选框 -->
+            </div>
+            <div style="margin-top: 12px;">
+                <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+                    <span><strong>📋 嵌入顺序 (点击顺序) </strong><span id="orderCountBadge" class="badge">0</span></span>
+                    <span><small>⚠️ 顺序循环应用于每个样本 | 偏移量跳过前N个slot</small></span>
+                </div>
+                <div id="orderListPanel" class="order-list">
+                    <div style="color:#94a3b8; text-align:center;">暂无顺序，请点击上方复选框定义嵌入比特位顺序</div>
+                </div>
+                <div class="warning-note" style="margin-top:8px;">
+                    💡 提示：点击位复选框将按照点击顺序记录嵌入位置。支持重复添加。嵌入时按此顺序循环处理每个样本。
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据与操作区 -->
+        <div class="flex-row" style="margin-top: 16px;">
+            <div class="control-group">
+                <label>📍 嵌入偏移量 (跳过前N个顺序槽位)</label>
+                <input type="number" id="embedOffset" value="0" min="0">
+                <div class="warning-note">从顺序列表的第offset+1个位置开始嵌入数据比特</div>
+            </div>
+            <div class="control-group">
+                <label>📁 要隐藏的数据 (文本 + 文件自动合并)</label>
+                <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                    <label class="file-input-label">📂 选择文件<input type="file" id="secretFile" style="display: none;"></label>
+                    <button id="clearSecretData" class="secondary" style="padding: 6px 12px;">清除所有</button>
+                </div>
+                <textarea id="secretText" rows="3" placeholder="在此输入要隐藏的文本... 如果同时选择了文件，文本将嵌入在文件之前"></textarea>
+                <div id="secretSizeInfo" style="font-size:0.75rem; margin-top:8px; background:#eef2ff; padding:6px; border-radius:10px;">📭 未选择任何数据</div>
+            </div>
+            <div class="control-group">
+                <div class="button-group">
+                    <button id="embedOnlyBtn" class="primary">🔒 执行嵌入 (Worker)</button>
+                    <button id="downloadStegoBtn" class="secondary">💾 下载隐写 WAV</button>
+                </div>
+                <div id="progressContainer" style="display:none;">
+                    <div class="progress-bar"><div id="embedProgress" class="progress-fill"></div></div>
+                    <div id="progressText" style="font-size:0.75rem;">处理中...</div>
+                </div>
+                <button id="testEmbedBtn" style="margin-top: 12px; background: #2b6e9e;">🧪 测试嵌入文本</button>
+                <div id="capacityInfo" class="warning-note" style="margin-top: 12px;">📊 容量: 未加载音频</div>
+            </div>
+        </div>
+
+        <div id="embedInfo" class="info-bar">💡 上传WAV → 自定义嵌入顺序（点击位复选框） → 设置偏移量 → 执行嵌入。支持PCM和32位浮点。</div>
+    </div>
+    <footer>⚠️ 提取时需使用完全相同顺序及偏移量。本工具直接操作音频样本，修改最低有效位，听觉上几乎无影响。</footer>
+</div>
+
+<script>
+    (function(){
+        "use strict";
+
+        // ---------- DOM 元素 ----------
+        const audioUpload = document.getElementById('audioUpload');
+        const audioPreviewContainer = document.getElementById('audioPreviewContainer');
+        const audioInfoDisplay = document.getElementById('audioInfoDisplay');
+        const bitCheckContainer = document.getElementById('bitCheckContainer');
+        const orderListPanel = document.getElementById('orderListPanel');
+        const orderCountBadge = document.getElementById('orderCountBadge');
+        const resetOrderBtn = document.getElementById('resetOrderBtn');
+        const embedOffset = document.getElementById('embedOffset');
+        const secretFileInput = document.getElementById('secretFile');
+        const secretTextarea = document.getElementById('secretText');
+        const secretSizeInfo = document.getElementById('secretSizeInfo');
+        const embedOnlyBtn = document.getElementById('embedOnlyBtn');
+        const downloadStegoBtn = document.getElementById('downloadStegoBtn');
+        const testEmbedBtn = document.getElementById('testEmbedBtn');
+        const clearSecretBtn = document.getElementById('clearSecretData');
+        const progressContainer = document.getElementById('progressContainer');
+        const embedProgress = document.getElementById('embedProgress');
+        const progressText = document.getElementById('progressText');
+        const capacityInfo = document.getElementById('capacityInfo');
+        const embedInfo = document.getElementById('embedInfo');
+
+        // ---------- 全局状态 ----------
+        let audioSamples = null;            // Float32Array 归一化样本 (-1..1)
+        let wavParams = null;              // { sampleRate, channels, bitsPerSample, audioFormat, totalSamples }
+        let embedSequence = [];            // [{ bitIndex }]
+        let stegoSamples = null;           // 嵌入后的样本
+        let stegoWavBlob = null;
+        let worker = null;
+
+        // ---------- 辅助UI函数 ----------
+        function setInfo(msg, isError = false) {
+            embedInfo.innerHTML = isError ? `❌ ${msg}` : `ℹ️ ${msg}`;
+            embedInfo.style.background = isError ? "#fee2e2" : "#eef2ff";
+            embedInfo.style.color = isError ? "#991b1b" : "#1e293b";
+        }
+
+        function showProgress(show, percent = 0, text = "") {
+            if (show) {
+                progressContainer.style.display = "block";
+                embedProgress.style.width = `${percent}%`;
+                progressText.innerText = text;
+            } else {
+                progressContainer.style.display = "none";
+            }
+        }
+
+        function updateCapacity() {
+            if (!wavParams || embedSequence.length === 0) {
+                capacityInfo.innerHTML = "📊 容量: 等待有效音频和顺序";
+                return;
+            }
+            const totalSamples = wavParams.totalSamples;
+            const seqLen = embedSequence.length;
+            const maxBits = totalSamples * seqLen;
+            const maxBytes = Math.floor(maxBits / 8);
+            capacityInfo.innerHTML = `📊 样本数 ${totalSamples} · 顺序长度 ${seqLen} · 最大容量 ${maxBits} bits (≈ ${maxBytes} 字节)`;
+        }
+
+        function refreshOrderUI() {
+            if (!orderListPanel) return;
+            if (embedSequence.length === 0) {
+                orderListPanel.innerHTML = `<div style="color:#94a3b8; text-align:center;">暂无顺序，请点击上方复选框定义嵌入比特位顺序</div>`;
+                orderCountBadge.innerText = '0';
+                updateCapacity();
+                return;
+            }
+            orderCountBadge.innerText = embedSequence.length;
+            let html = '';
+            embedSequence.forEach((item, idx) => {
+                html += `
+                    <div class="order-item">
+                        <span>#${idx+1} &nbsp; bit ${item.bitIndex}</span>
+                        <button class="del-order" data-index="${idx}">删除</button>
+                    </div>
+                `;
+            });
+            orderListPanel.innerHTML = html;
+            document.querySelectorAll('.del-order').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(btn.getAttribute('data-index'), 10);
+                    if (!isNaN(idx)) {
+                        embedSequence.splice(idx, 1);
+                        refreshOrderUI();
+                        setInfo(`已删除顺序第${idx+1}项，新顺序长度 ${embedSequence.length}`);
+                        stegoWavBlob = null; downloadStegoBtn.disabled = true;
+                    }
+                });
+            });
+            updateCapacity();
+        }
+
+        function addBitToSequence(bitIndex) {
+            embedSequence.push({ bitIndex });
+            refreshOrderUI();
+            setInfo(`添加位 bit ${bitIndex}，当前顺序长度 ${embedSequence.length}`);
+            stegoWavBlob = null; downloadStegoBtn.disabled = true;
+        }
+
+        // 根据位深度生成复选框
+        function generateBitCheckboxes(bitsPerSample) {
+            bitCheckContainer.innerHTML = '';
+            const maxBit = bitsPerSample - 1;
+            for (let b = 0; b <= maxBit; b++) {
+                const label = document.createElement('label');
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = b;
+                label.appendChild(cb);
+                label.appendChild(document.createTextNode(`${b}`));
+                label.addEventListener('change', (e) => {
+                    if (cb.checked) {
+                        addBitToSequence(b);
+                        cb.checked = false; // 点击后立即取消勾选，仅用于触发添加
+                    }
+                });
+                bitCheckContainer.appendChild(label);
+            }
+        }
+
+        // 更新音频信息显示
+        function updateAudioInfoDisplay(text, isGood = true) {
+            audioInfoDisplay.innerHTML = text;
+            audioInfoDisplay.style.background = isGood ? '#e0f2fe' : '#fee2e2';
+            audioInfoDisplay.style.color = isGood ? '#0369a1' : '#991b1b';
+        }
+
+        // 更新秘密数据摘要
+        async function updateSecretInfo() {
+            const hasFile = secretFileInput.files.length > 0;
+            const hasText = secretTextarea.value.trim() !== "";
+            if (!hasFile && !hasText) {
+                secretSizeInfo.innerHTML = "📭 未选择任何数据";
+                return;
+            }
+            let fileSize = 0, fileName = "";
+            if (hasFile) {
+                const file = secretFileInput.files[0];
+                fileSize = file.size;
+                fileName = file.name;
+            }
+            let textBytes = 0;
+            if (hasText) {
+                textBytes = new TextEncoder().encode(secretTextarea.value).length;
+            }
+            if (hasFile && hasText) {
+                secretSizeInfo.innerHTML = `📄 文本: ${textBytes} 字节 + 📁 ${fileName} (${fileSize} 字节) = 总计 ${textBytes+fileSize} 字节`;
+            } else if (hasFile) {
+                secretSizeInfo.innerHTML = `📁 ${fileName} (${fileSize} 字节)`;
+            } else {
+                secretSizeInfo.innerHTML = `📄 文本: ${textBytes} 字节`;
+            }
+        }
+
+        // ---------- WAV 解析与编码 (基于之前讨论) ----------
+        function parseWavFile(arrayBuffer) {
+            const view = new DataView(arrayBuffer);
+            let offset = 0;
+            const riff = String.fromCharCode(view.getUint8(offset), view.getUint8(offset+1), view.getUint8(offset+2), view.getUint8(offset+3)); offset+=4;
+            if (riff !== 'RIFF') throw new Error('不是RIFF文件');
+            offset+=4; // 跳过文件大小
+            const wave = String.fromCharCode(view.getUint8(offset), view.getUint8(offset+1), view.getUint8(offset+2), view.getUint8(offset+3)); offset+=4;
+            if (wave !== 'WAVE') throw new Error('不是WAVE格式');
+
+            let fmt = null, dataOffset = -1, dataSize = 0;
+            while (offset < view.byteLength) {
+                const chunkId = String.fromCharCode(view.getUint8(offset), view.getUint8(offset+1), view.getUint8(offset+2), view.getUint8(offset+3)); offset+=4;
+                const chunkSize = view.getUint32(offset, true); offset+=4;
+                if (chunkId === 'fmt ') {
+                    const audioFormat = view.getUint16(offset, true); offset+=2;
+                    const channels = view.getUint16(offset, true); offset+=2;
+                    const sampleRate = view.getUint32(offset, true); offset+=4;
+                    const byteRate = view.getUint32(offset, true); offset+=4;
+                    const blockAlign = view.getUint16(offset, true); offset+=2;
+                    const bitsPerSample = view.getUint16(offset, true); offset+=2;
+                    fmt = { audioFormat, channels, sampleRate, byteRate, blockAlign, bitsPerSample };
+                    if (chunkSize > 16) offset += chunkSize - 16;
+                } else if (chunkId === 'data') {
+                    dataOffset = offset;
+                    dataSize = chunkSize;
+                    break;
+                } else {
+                    offset += chunkSize;
+                }
+            }
+            if (!fmt) throw new Error('未找到fmt块');
+            if (dataOffset === -1) throw new Error('未找到data块');
+
+            const bytesPerSample = fmt.bitsPerSample / 8;
+            const totalSamples = Math.floor(dataSize / bytesPerSample);
+            const samples = new Float32Array(totalSamples);
+            let sampleIdx = 0;
+            offset = dataOffset;
+            const end = dataOffset + dataSize;
+
+            if (fmt.audioFormat === 1) { // PCM
+                switch (fmt.bitsPerSample) {
+                    case 8:
+                        while (offset < end) { samples[sampleIdx++] = (view.getUint8(offset) - 128) / 128.0; offset++; }
+                        break;
+                    case 16:
+                        while (offset < end) { samples[sampleIdx++] = view.getInt16(offset, true) / 32768.0; offset+=2; }
+                        break;
+                    case 24:
+                        while (offset < end) {
+                            let val = (view.getUint8(offset+2) << 24) | (view.getUint8(offset+1) << 16) | (view.getUint8(offset) << 8);
+                            val = val >> 8;
+                            samples[sampleIdx++] = val / 8388608.0;
+                            offset += 3;
+                        }
+                        break;
+                    case 32:
+                        while (offset < end) { samples[sampleIdx++] = view.getInt32(offset, true) / 2147483648.0; offset+=4; }
+                        break;
+                    default: throw new Error('不支持的位深度');
+                }
+            } else if (fmt.audioFormat === 3) { // Float
+                if (fmt.bitsPerSample !== 32) throw new Error('浮点仅支持32位');
+                while (offset < end) { samples[sampleIdx++] = view.getFloat32(offset, true); offset+=4; }
+            } else {
+                throw new Error('不支持的音频格式');
+            }
+
+            return { samples, params: { ...fmt, totalSamples } };
+        }
+
+        function encodeWav(samples, params) {
+            const { sampleRate, channels, bitsPerSample, audioFormat } = params;
+            const numSamples = samples.length;
+            const bytesPerSample = bitsPerSample / 8;
+            const dataSize = numSamples * bytesPerSample;
+            const fileSize = 36 + dataSize;
+
+            const buffer = new ArrayBuffer(fileSize + 8);
+            const view = new DataView(buffer);
+            let offset = 0;
+            // RIFF
+            view.setUint8(offset++, 0x52); view.setUint8(offset++, 0x49); view.setUint8(offset++, 0x46); view.setUint8(offset++, 0x46);
+            view.setUint32(offset, fileSize, true); offset+=4;
+            view.setUint8(offset++, 0x57); view.setUint8(offset++, 0x41); view.setUint8(offset++, 0x56); view.setUint8(offset++, 0x45);
+            // fmt
+            view.setUint8(offset++, 0x66); view.setUint8(offset++, 0x6D); view.setUint8(offset++, 0x74); view.setUint8(offset++, 0x20);
+            view.setUint32(offset, 16, true); offset+=4;
+            view.setUint16(offset, audioFormat, true); offset+=2;
+            view.setUint16(offset, channels, true); offset+=2;
+            view.setUint32(offset, sampleRate, true); offset+=4;
+            view.setUint32(offset, sampleRate * channels * bytesPerSample, true); offset+=4;
+            view.setUint16(offset, channels * bytesPerSample, true); offset+=2;
+            view.setUint16(offset, bitsPerSample, true); offset+=2;
+            // data
+            view.setUint8(offset++, 0x64); view.setUint8(offset++, 0x61); view.setUint8(offset++, 0x74); view.setUint8(offset++, 0x61);
+            view.setUint32(offset, dataSize, true); offset+=4;
+
+            for (let i = 0; i < numSamples; i++) {
+                const val = samples[i];
+                if (audioFormat === 1) {
+                    switch (bitsPerSample) {
+                        case 8: view.setUint8(offset, Math.round(val * 127.5 + 127.5)); offset+=1; break;
+                        case 16: view.setInt16(offset, Math.round(val * 32767), true); offset+=2; break;
+                        case 24: {
+                            let intVal = Math.round(val * 8388607);
+                            view.setUint8(offset, intVal & 0xFF); offset++;
+                            view.setUint8(offset, (intVal>>8) & 0xFF); offset++;
+                            view.setUint8(offset, (intVal>>16) & 0xFF); offset++;
+                            break;
+                        }
+                        case 32: view.setInt32(offset, Math.round(val * 2147483647), true); offset+=4; break;
+                    }
+                } else if (audioFormat === 3) {
+                    view.setFloat32(offset, val, true); offset+=4;
+                }
+            }
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        // ---------- 数据合并与位转换 ----------
+        async function prepareSecretBytes() {
+            const hasFile = secretFileInput.files.length > 0;
+            const hasText = secretTextarea.value.trim() !== "";
+            if (!hasFile && !hasText) throw new Error('没有输入任何数据');
+            let textBytes = hasText ? new TextEncoder().encode(secretTextarea.value) : new Uint8Array(0);
+            let fileBytes = hasFile ? new Uint8Array(await secretFileInput.files[0].arrayBuffer()) : new Uint8Array(0);
+            const merged = new Uint8Array(textBytes.length + fileBytes.length);
+            merged.set(textBytes, 0);
+            merged.set(fileBytes, textBytes.length);
+            return merged;
+        }
+
+        function bytesToBits(bytes) {
+            const bits = new Uint8Array(bytes.length * 8);
+            for (let i = 0; i < bytes.length; i++) {
+                for (let b = 0; b < 8; b++) {
+                    bits[i*8 + b] = (bytes[i] >> b) & 1;
+                }
+            }
+            return bits;
+        }
+
+        // ---------- 嵌入核心 (使用Worker) ----------
+        function createEmbedWorker() {
+            const workerCode = `
+                // 修改后的 Worker 内嵌逻辑
+self.onmessage = function(e) {
+    const { samples, embedSeq, dataBits, offsetSlots, bitsPerSample, audioFormat, totalSamples } = e.data;
+    const newSamples = new Float32Array(samples);
+    const step = (audioFormat === 3) ? null : (1.0 / (1 << (bitsPerSample - 1))); // PCM 步长
+    let slotIdx = 0, bitIdx = 0;
+    let lastProgress = 0;
+
+    for (let i = 0; i < totalSamples; i++) {
+        for (let seq of embedSeq) {
+            const needModify = (slotIdx >= offsetSlots && bitIdx < dataBits.length);
+            if (needModify) {
+                const bit = dataBits[bitIdx++];
+                const bitPos = seq.bitIndex;
+                let val = newSamples[i];
+
+                if (audioFormat === 3) {
+                    // 32位浮点：直接操作二进制
+                    const farr = new Float32Array(1);
+                    farr[0] = val;
+                    const bytes = new Uint8Array(farr.buffer);
+                    const byteIdx = Math.floor(bitPos / 8);
+                    const bitInByte = bitPos % 8;
+                    if (bit === 1) bytes[byteIdx] |= (1 << bitInByte);
+                    else bytes[byteIdx] &= ~(1 << bitInByte);
+                    newSamples[i] = farr[0];
+                } else {
+                    // PCM整数：取整 → 修改指定位 → 还原
+                    let intVal = Math.round(val / step);
+                    if (bit === 1) intVal |= (1 << bitPos);
+                    else intVal &= ~(1 << bitPos);
+                    newSamples[i] = intVal * step;
+                }
+            }
+            slotIdx++;
+        }
+        
+                        const progress = (i / totalSamples) * 100;
+                        if (progress - lastProgress >= 5) {
+                            lastProgress = progress;
+                            self.postMessage({ type: 'progress', percent: progress, text: \`嵌入中 \${Math.round(progress)}% (\${i}/\${totalSamples})\` });
+                        }
+                    }
+                    self.postMessage({ type: 'complete', newSamples });
+                };
+            `;
+            const blob = new Blob([workerCode], { type: 'application/javascript' });
+            return new Worker(URL.createObjectURL(blob));
+        }
+
+        async function performEmbed() {
+            if (!audioSamples || !wavParams) throw new Error('请先加载WAV文件');
+            if (embedSequence.length === 0) throw new Error('请先定义嵌入顺序');
+            const secretBytes = await prepareSecretBytes();
+            const dataBits = bytesToBits(secretBytes);
+            const offsetSlots = parseInt(embedOffset.value, 10) || 0;
+            const totalSlots = wavParams.totalSamples * embedSequence.length;
+            if (offsetSlots + dataBits.length > totalSlots) {
+                throw new Error(`容量不足: 需要 ${offsetSlots+dataBits.length} 槽位, 最大 ${totalSlots}`);
+            }
+
+            if (worker) worker.terminate();
+            worker = createEmbedWorker();
+            showProgress(true, 0, '启动Worker...');
+            setInfo(`⏳ 嵌入 ${secretBytes.length} 字节, 顺序长度 ${embedSequence.length}, 偏移 ${offsetSlots}`);
+
+            return new Promise((resolve, reject) => {
+                worker.onmessage = (e) => {
+                    const msg = e.data;
+                    if (msg.type === 'progress') {
+                        embedProgress.style.width = `${msg.percent}%`;
+                        progressText.innerText = msg.text;
+                    } else if (msg.type === 'complete') {
+                        stegoSamples = msg.newSamples;
+                        stegoWavBlob = encodeWav(stegoSamples, wavParams);
+                        showProgress(false);
+                        setInfo(`✅ 嵌入成功! 数据 ${secretBytes.length} 字节已隐藏。`);
+                        downloadStegoBtn.disabled = false;
+                        worker.terminate();
+                        worker = null;
+                        resolve();
+                    }
+                };
+                worker.onerror = (err) => {
+                    showProgress(false);
+                    reject(new Error('Worker错误: ' + err.message));
+                    worker.terminate();
+                    worker = null;
+                };
+                worker.postMessage({
+                    samples: audioSamples,
+                    embedSeq: embedSequence,
+                    dataBits: dataBits,
+                    offsetSlots: offsetSlots,
+                    bitsPerSample: wavParams.bitsPerSample,
+                    audioFormat: wavParams.audioFormat,
+                    totalSamples: wavParams.totalSamples
+                }, [audioSamples.buffer]);
+            });
+        }
+
+        // ---------- 事件绑定 ----------
+        audioUpload.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            audioPreviewContainer.innerHTML = `<audio controls src="${URL.createObjectURL(file)}" style="width:100%; max-width:400px;"></audio>`;
+            try {
+                const buf = await file.arrayBuffer();
+                const { samples, params } = parseWavFile(buf);
+                audioSamples = samples;
+                wavParams = params;
+                generateBitCheckboxes(params.bitsPerSample);
+                embedSequence = [];
+                refreshOrderUI();
+                updateAudioInfoDisplay(`✅ 采样率 ${params.sampleRate} Hz · ${params.channels}声道 · ${params.bitsPerSample}bit · 总样本 ${params.totalSamples}`);
+                setInfo(`音频加载成功，总样本数 ${params.totalSamples}`);
+                stegoWavBlob = null; downloadStegoBtn.disabled = true;
+            } catch (err) {
+                updateAudioInfoDisplay(`❌ 解析失败: ${err.message}`, false);
+                setInfo(err.message, true);
+            }
+        });
+
+        resetOrderBtn.addEventListener('click', () => {
+            embedSequence = [];
+            refreshOrderUI();
+            setInfo('嵌入顺序已清空');
+            stegoWavBlob = null; downloadStegoBtn.disabled = true;
+        });
+
+        embedOnlyBtn.addEventListener('click', async () => {
+            embedOnlyBtn.disabled = true;
+            try {
+                await performEmbed();
+            } catch (err) {
+                setInfo(`嵌入失败: ${err.message}`, true);
+                showProgress(false);
+            } finally {
+                embedOnlyBtn.disabled = false;
+            }
+        });
+
+        downloadStegoBtn.addEventListener('click', () => {
+            if (!stegoWavBlob) return;
+            const url = URL.createObjectURL(stegoWavBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'stego_audio.wav';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        testEmbedBtn.addEventListener('click', () => {
+            secretTextarea.value = 'LSB测试消息，WAV隐写工具。';
+            secretFileInput.value = '';
+            updateSecretInfo();
+            embedOnlyBtn.click();
+        });
+
+        clearSecretBtn.addEventListener('click', () => {
+            secretFileInput.value = '';
+            secretTextarea.value = '';
+            updateSecretInfo();
+            setInfo('已清除待隐藏数据');
+        });
+
+        secretFileInput.addEventListener('change', updateSecretInfo);
+        secretTextarea.addEventListener('input', updateSecretInfo);
+        embedOffset.addEventListener('input', () => {
+            stegoWavBlob = null; downloadStegoBtn.disabled = true;
+            updateCapacity();
+        });
+
+        // 初始化
+        generateBitCheckboxes(16); // 默认显示16位
+        updateSecretInfo();
+        setInfo('就绪。请上传WAV文件开始。');
+    })();
+</script>
+</body>
+</html>
