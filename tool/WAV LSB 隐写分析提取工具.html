@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>WAV LSB 隐写提取工具 · 自定义位顺序提取</title>
+    <!-- pako 保留（未使用），UPNG 不再需要，但保留其定义以免报错（实际上WAV不用） -->
+    <style>
+        /* 样式完全沿用图片提取工具，仅修改标题文字 */
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            margin: 0;
+            padding: 24px 20px;
+            color: #1e2a3a;
+        }
+        .container { max-width: 1600px; margin: 0 auto; }
+        .card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+            padding: 24px 28px;
+            margin-bottom: 28px;
+        }
+        h1 {
+            font-size: 1.9rem;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #1e3c72, #2b4c7c);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .sub {
+            color: #5a6e7c;
+            border-left: 4px solid #3b82f6;
+            padding-left: 16px;
+            margin-bottom: 24px;
+            font-size: 0.95rem;
+        }
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        .control-group {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 16px 20px;
+            flex: 1;
+            min-width: 220px;
+            border: 1px solid #e2e8f0;
+        }
+        .control-group label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            color: #0f3b5c;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid #cbd5e1;
+            background: white;
+            font-size: 0.9rem;
+        }
+        textarea {
+            font-family: monospace;
+            resize: vertical;
+        }
+        button {
+            background: #1e4a76;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 40px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 0.9rem;
+        }
+        button.primary { background: #0f3b5c; }
+        button.primary:hover { background: #1e4a76; transform: translateY(-1px); }
+        button.secondary { background: #2c6e9e; }
+        button.warning { background: #b45309; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .info-bar {
+            background: #eef2ff;
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            margin: 16px 0;
+            word-break: break-all;
+        }
+        .img-preview {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 16px;
+            margin-top: 12px;
+            border: 1px solid #ddd;
+        }
+        .file-input-label {
+            background: #e2e8f0;
+            padding: 8px 12px;
+            border-radius: 30px;
+            display: inline-block;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .warning-note {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            margin-top: 8px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: #3b82f6;
+            transition: width 0.2s;
+        }
+        .button-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .sequence-config {
+            background: #fefce8;
+            border-radius: 20px;
+            padding: 16px;
+            margin-top: 10px;
+            border: 1px solid #e2e8f0;
+        }
+        .bit-check-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+            margin: 12px 0;
+        }
+        .bit-check-group label {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: 0.1s;
+        }
+        .bit-check-group label:hover { background: #e2e8f0; }
+        .bit-check-group input {
+            width: auto;
+            margin: 0;
+            transform: scale(0.8);
+        }
+        .order-list {
+            background: #0f172a;
+            color: #e2e8f0;
+            border-radius: 16px;
+            padding: 12px;
+            max-height: 180px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.8rem;
+        }
+        .order-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 8px;
+            border-bottom: 1px solid #334155;
+        }
+        .order-item span { font-weight: 500; }
+        .del-order {
+            background: #b91c1c;
+            border: none;
+            padding: 2px 8px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            cursor: pointer;
+        }
+        .badge {
+            background: #3b82f6;
+            border-radius: 30px;
+            padding: 2px 8px;
+            font-size: 0.7rem;
+        }
+        .extracted-data {
+            background: #0f172a;
+            border-radius: 20px;
+            padding: 20px;
+            margin-top: 24px;
+            border: 1px solid #334155;
+        }
+        .result-label {
+            font-weight: 700;
+            margin-top: 18px;
+            margin-bottom: 8px;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #334155;
+            color: #e2e8f0;
+        }
+        .result-label:first-of-type { margin-top: 0; }
+        .result-area {
+            background: #0f172a;
+            color: #e2e8f0;
+            border-radius: 16px;
+            padding: 16px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            overflow-y: auto;
+            white-space: pre;
+            max-height: 320px;
+            line-height: 1.4;
+            border: 1px solid #1e293b;
+        }
+        .result-area pre { margin: 0; font-family: inherit; background: transparent; color: inherit; }
+        .extract-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #334155;
+        }
+        .extract-header strong {
+            font-size: 1.1rem;
+            color: #f1f5f9;
+        }
+        .truncation-warning {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            margin-bottom: 12px;
+        }
+        .search-bar {
+            background: #1e293b;
+            border-radius: 20px;
+            padding: 14px 18px;
+            margin: 16px 0 20px 0;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            gap: 12px;
+            border: 1px solid #334155;
+        }
+        .search-group {
+            flex: 2;
+            min-width: 160px;
+        }
+        .search-group label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: #94a3b8;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .search-group input, .search-group select {
+            background: #0f172a;
+            color: #e2e8f0;
+            border: 1px solid #475569;
+            padding: 8px 12px;
+            border-radius: 28px;
+            width: 100%;
+        }
+        .search-group input:focus {
+            border-color: #3b82f6;
+            outline: none;
+        }
+        .search-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .search-actions button {
+            padding: 6px 16px;
+            font-size: 0.8rem;
+            background: #2c6e9e;
+        }
+        .search-actions button.clear-highlight { background: #5b6e8c; }
+        .match-counter {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-size: 0.75rem;
+            font-family: monospace;
+            border: 1px solid #475569;
+        }
+        mark.search-highlight {
+            background-color: #facc15;
+            color: #0f172a;
+            border-radius: 4px;
+            padding: 0 1px;
+            font-weight: 500;
+            box-shadow: 0 0 0 1px #eab308;
+        }
+        mark.search-highlight.current {
+            background-color: #ff8c00;
+            color: #000;
+            box-shadow: 0 0 0 2px #ff4500;
+        }
+        footer {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #5c6f87;
+            margin-top: 30px;
+        }
+        @media (max-width: 700px) {
+            .card { padding: 16px; }
+            .bit-check-group { gap: 3px; }
+            .result-area { font-size: 0.7rem; max-height: 260px; }
+            .search-bar { flex-direction: column; align-items: stretch; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <h1>🎵 WAV LSB 隐写提取工具 · 自定义比特位顺序</h1>
+        <div class="sub">🎛️ 使用与嵌入时完全相同的顺序和偏移量，支持限制提取字节数（提前终止），分块处理大文件。</div>
+
+        <div class="flex-row" style="margin-bottom: 20px;">
+            <div style="flex:2">
+                <label>📁 含隐写信息的音频 (WAV)</label>
+                <input type="file" id="stegoAudioUpload" accept=".wav, .wave, audio/wav, audio/wave">
+                <div id="audioPreviewContainer" style="margin-top: 10px;"></div>
+                <div id="loadModeInfo" class="warning-note" style="margin-top:8px; background:#e0f2fe;">ℹ️ 等待WAV文件加载…</div>
+            </div>
+        </div>
+
+        <!-- 位顺序配置区 (根据音频位深度动态生成复选框) -->
+        <div class="sequence-config">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                <label style="font-weight: bold;">🧩 嵌入顺序定义 (必须与嵌入时一致)</label>
+                <div>
+                    <button id="resetOrderBtn" type="button" style="background: #6c757d; padding: 6px 12px;">🗑️ 清空顺序</button>
+                </div>
+            </div>
+            <div id="bitCheckContainer" class="bit-check-group">
+                <!-- 动态生成位复选框 -->
+            </div>
+            <div style="margin-top: 12px;">
+                <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+                    <span><strong>📋 嵌入顺序 (点击顺序) </strong><span id="orderCountBadge" class="badge">0</span></span>
+                    <span><small>⚠️ 提取时需完全一致，包括顺序和偏移量</small></span>
+                </div>
+                <div id="orderListPanel" class="order-list">
+                    <div style="color:#94a3b8; text-align:center;">暂无顺序，请点击上方复选框定义嵌入比特位顺序</div>
+                </div>
+                <div class="warning-note" style="margin-top:8px;">
+                    💡 提示：按嵌入时的顺序，依次点击位复选框。支持重复添加。顺序必须完全相同。
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-row" style="margin-top: 16px;">
+            <div class="control-group">
+                <label>📍 嵌入偏移量 (跳过前N个顺序槽位)</label>
+                <input type="number" id="extractOffset" value="0" min="0">
+                <div class="warning-note">必须与嵌入时的偏移量一致</div>
+            </div>
+            <div class="control-group">
+                <label>🔢 最大提取字节数 (0 = 全部提取)</label>
+                <input type="number" id="maxExtractBytes" value="0" min="0" step="1">
+                <div class="warning-note">指定提取字节数，达到后立即停止，提高效率 (0表示提取所有可用数据)</div>
+            </div>
+            <div class="control-group">
+                <label>📊 提取信息</label>
+                <div id="capacityInfo" class="warning-note" style="margin-bottom: 12px;">📊 未加载音频</div>
+                <div class="button-group">
+                    <button id="extractBtn" class="primary">🔍 开始提取数据 (分块)</button>
+                </div>
+                <div id="progressContainer" style="display:none;">
+                    <div class="progress-bar"><div id="extractProgress" class="progress-fill"></div></div>
+                    <div id="progressText" style="font-size:0.75rem;">提取中...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="extractInfo" class="info-bar">💡 上传隐写音频 → 定义完全相同的顺序和偏移量 → 可选限制提取字节数 → 点击提取 (分块处理，支持提前终止)。提取后展示二进制/十六进制/UTF-8全量预览，支持内容查找高亮。</div>
+
+        <!-- 提取结果显示区域 -->
+        <div id="resultArea" class="extracted-data" style="display: none;">
+            <div class="extract-header">
+                <strong>📦 提取的数据 <span id="extractLimitStatus"></span> (共 <span id="extractedSize">0</span> 字节)</strong>
+                <div class="button-group">
+                    <button id="saveAsFileBtn" class="secondary">💾 保存为文件</button>
+                </div>
+            </div>
+            <div id="previewTruncationWarning" class="truncation-warning" style="display: none;"></div>
+            
+            <!-- 查找栏 -->
+            <div class="search-bar" id="searchBar">
+                <div class="search-group">
+                    <label>🔍 查找内容</label>
+                    <input type="text" id="searchKeyword" placeholder="二进制: 01010101  十六进制: FF A0 或 FFA0  文本: 关键词" autocomplete="off">
+                </div>
+                <div class="search-group">
+                    <label>📄 查找视图</label>
+                    <select id="searchView">
+                        <option value="binary">二进制编码视图</option>
+                        <option value="hex">十六进制转储视图</option>
+                        <option value="utf8">UTF-8 文本视图</option>
+                    </select>
+                </div>
+                <div class="search-actions">
+                    <button id="searchBtn" class="primary">🔎 查找高亮</button>
+                    <button id="clearHighlightBtn" class="clear-highlight">✖️ 清除高亮</button>
+                    <button id="prevMatchBtn" title="上一个匹配">⬆️ 上一个</button>
+                    <button id="nextMatchBtn" title="下一个匹配">⬇️ 下一个</button>
+                    <span id="matchCounter" class="match-counter">0 / 0</span>
+                </div>
+            </div>
+            
+            <div class="result-label">📟 二进制编码 (每字节8位 · 行首偏移)</div>
+            <div id="binaryResult" class="result-area"><pre>—</pre></div>
+            
+            <div class="result-label">🔢 十六进制转储 (每行16字节 · 偏移行标)</div>
+            <div id="hexResult" class="result-area"><pre>—</pre></div>
+            
+            <div class="result-label">🌐 UTF-8 文本 (每16字节一组 · 字节偏移行标)</div>
+            <div id="utf8Result" class="result-area"><pre>—</pre></div>
+        </div>
+    </div>
+    <footer>⚠️ 提取参数必须与嵌入时完全一致（顺序列表、偏移量）。支持限制提取字节数，分块处理。<br>🔍 查找功能支持二进制(忽略空格)、十六进制(忽略空格/大小写)、UTF-8文本高亮及跳转。</footer>
+</div>
+
+<script>
+(function(){
+    "use strict";
+
+    // ---------- DOM 元素 ----------
+    const stegoAudioUpload = document.getElementById('stegoAudioUpload');
+    const audioPreviewContainer = document.getElementById('audioPreviewContainer');
+    const loadModeInfo = document.getElementById('loadModeInfo');
+    const bitCheckContainer = document.getElementById('bitCheckContainer');
+    const orderListPanel = document.getElementById('orderListPanel');
+    const orderCountBadge = document.getElementById('orderCountBadge');
+    const resetOrderBtn = document.getElementById('resetOrderBtn');
+    const extractOffset = document.getElementById('extractOffset');
+    const maxExtractBytesInput = document.getElementById('maxExtractBytes');
+    const extractBtn = document.getElementById('extractBtn');
+    const progressContainer = document.getElementById('progressContainer');
+    const extractProgress = document.getElementById('extractProgress');
+    const progressText = document.getElementById('progressText');
+    const capacityInfo = document.getElementById('capacityInfo');
+    const extractInfo = document.getElementById('extractInfo');
+    const resultArea = document.getElementById('resultArea');
+    const extractedSizeSpan = document.getElementById('extractedSize');
+    const extractLimitStatus = document.getElementById('extractLimitStatus');
+    const saveAsFileBtn = document.getElementById('saveAsFileBtn');
+    const binaryResultDiv = document.getElementById('binaryResult');
+    const hexResultDiv = document.getElementById('hexResult');
+    const utf8ResultDiv = document.getElementById('utf8Result');
+    const truncationWarningDiv = document.getElementById('previewTruncationWarning');
+
+    // 查找相关
+    const searchKeyword = document.getElementById('searchKeyword');
+    const searchView = document.getElementById('searchView');
+    const searchBtn = document.getElementById('searchBtn');
+    const clearHighlightBtn = document.getElementById('clearHighlightBtn');
+    const prevMatchBtn = document.getElementById('prevMatchBtn');
+    const nextMatchBtn = document.getElementById('nextMatchBtn');
+    const matchCounter = document.getElementById('matchCounter');
+
+    // ---------- 全局状态 ----------
+    let audioSamples = null;            // Float32Array 归一化样本
+    let wavParams = null;              // { sampleRate, channels, bitsPerSample, audioFormat, totalSamples }
+    let embedSequence = [];            // [{ bitIndex }]
+    let extractedBytes = null;         
+    let worker = null;
+    let accumulatedChunks = [];
+    let totalExtractedBytes = 0;
+    
+    // 查找高亮相关
+    let rawBinaryLines = [], rawHexLines = [], rawUtf8Lines = [];
+    let currentMatchRanges = [];
+    let currentMatchIndex = -1;
+    let currentSearchViewMode = "binary";
+    let lastSearchKeyword = "";
+    
+    const MAX_EXTRACT_BYTES = 500 * 1024 * 1024;   // 500MB 安全限制
+    const MAX_PREVIEW_BYTES = 1 * 1024 * 1024;     // 预览最大1MB
+
+    // ---------- 辅助函数 ----------
+    function escapeHtml(str) {
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    function setInfo(msg, isError = false) {
+        extractInfo.innerHTML = isError ? `❌ ${msg}` : `ℹ️ ${msg}`;
+        extractInfo.style.background = isError ? "#fee2e2" : "#eef2ff";
+        extractInfo.style.color = isError ? "#991b1b" : "#1e293b";
+    }
+
+    function showProgress(show, percent = 0, text = "") {
+        if (show) {
+            progressContainer.style.display = "block";
+            extractProgress.style.width = `${percent}%`;
+            progressText.innerText = text;
+        } else {
+            progressContainer.style.display = "none";
+        }
+    }
+
+    function updateCapacityDisplay() {
+        if (!wavParams || embedSequence.length === 0) {
+            capacityInfo.innerHTML = "📊 等待有效音频和顺序";
+            return;
+        }
+        const totalSamples = wavParams.totalSamples;
+        const seqLen = embedSequence.length;
+        const maxBits = totalSamples * seqLen;
+        const maxBytes = Math.floor(maxBits / 8);
+        capacityInfo.innerHTML = `📊 样本数 ${totalSamples.toLocaleString()} · 顺序长度 ${seqLen} · 理论最大 ${maxBytes.toLocaleString()} 字节`;
+    }
+
+    function refreshOrderUI() {
+        if (!orderListPanel) return;
+        if (embedSequence.length === 0) {
+            orderListPanel.innerHTML = `<div style="color:#94a3b8; text-align:center;">暂无顺序，请点击上方复选框定义嵌入比特位顺序</div>`;
+            orderCountBadge.innerText = '0';
+            updateCapacityDisplay();
+            return;
+        }
+        orderCountBadge.innerText = embedSequence.length;
+        let html = '';
+        embedSequence.forEach((item, idx) => {
+            html += `
+                <div class="order-item">
+                    <span>#${idx+1} &nbsp; bit ${item.bitIndex}</span>
+                    <button class="del-order" data-index="${idx}">删除</button>
+                </div>
+            `;
+        });
+        orderListPanel.innerHTML = html;
+        document.querySelectorAll('.del-order').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(btn.getAttribute('data-index'), 10);
+                if (!isNaN(idx)) {
+                    embedSequence.splice(idx, 1);
+                    refreshOrderUI();
+                    setInfo(`已删除顺序第${idx+1}项，新顺序长度 ${embedSequence.length}`);
+                    resultArea.style.display = 'none';
+                    extractedBytes = null;
+                }
+            });
+        });
+        updateCapacityDisplay();
+        resultArea.style.display = 'none';
+        extractedBytes = null;
+    }
+
+    function addBitToSequence(bitIndex) {
+        embedSequence.push({ bitIndex });
+        refreshOrderUI();
+        setInfo(`添加位 bit ${bitIndex}，当前顺序长度 ${embedSequence.length}`);
+        resultArea.style.display = 'none';
+        extractedBytes = null;
+    }
+
+    // 根据位深度生成复选框
+    function generateBitCheckboxes(bitsPerSample) {
+        bitCheckContainer.innerHTML = '';
+        const maxBit = bitsPerSample - 1;
+        for (let b = 0; b <= maxBit; b++) {
+            const label = document.createElement('label');
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = b;
+            label.appendChild(cb);
+            label.appendChild(document.createTextNode(`${b}`));
+            label.addEventListener('change', (e) => {
+                if (cb.checked) {
+                    addBitToSequence(b);
+                    cb.checked = false;
+                }
+            });
+            bitCheckContainer.appendChild(label);
+        }
+    }
+
+    // ---------- WAV 解析 (复用嵌入工具逻辑) ----------
+    function parseWavFile(arrayBuffer) {
+        const view = new DataView(arrayBuffer);
+        let offset = 0;
+        const riff = String.fromCharCode(view.getUint8(offset), view.getUint8(offset+1), view.getUint8(offset+2), view.getUint8(offset+3)); offset+=4;
+        if (riff !== 'RIFF') throw new Error('不是RIFF文件');
+        offset+=4; // 文件大小
+        const wave = String.fromCharCode(view.getUint8(offset), view.getUint8(offset+1), view.getUint8(offset+2), view.getUint8(offset+3)); offset+=4;
+        if (wave !== 'WAVE') throw new Error('不是WAVE格式');
+
+        let fmt = null, dataOffset = -1, dataSize = 0;
+        while (offset < view.byteLength) {
+            const chunkId = String.fromCharCode(view.getUint8(offset), view.getUint8(offset+1), view.getUint8(offset+2), view.getUint8(offset+3)); offset+=4;
+            const chunkSize = view.getUint32(offset, true); offset+=4;
+            if (chunkId === 'fmt ') {
+                const audioFormat = view.getUint16(offset, true); offset+=2;
+                const channels = view.getUint16(offset, true); offset+=2;
+                const sampleRate = view.getUint32(offset, true); offset+=4;
+                const byteRate = view.getUint32(offset, true); offset+=4;
+                const blockAlign = view.getUint16(offset, true); offset+=2;
+                const bitsPerSample = view.getUint16(offset, true); offset+=2;
+                fmt = { audioFormat, channels, sampleRate, byteRate, blockAlign, bitsPerSample };
+                if (chunkSize > 16) offset += chunkSize - 16;
+            } else if (chunkId === 'data') {
+                dataOffset = offset;
+                dataSize = chunkSize;
+                break;
+            } else {
+                offset += chunkSize;
+            }
+        }
+        if (!fmt) throw new Error('未找到fmt块');
+        if (dataOffset === -1) throw new Error('未找到data块');
+
+        const bytesPerSample = fmt.bitsPerSample / 8;
+        const totalSamples = Math.floor(dataSize / bytesPerSample);
+        const samples = new Float32Array(totalSamples);
+        let sampleIdx = 0;
+        offset = dataOffset;
+        const end = dataOffset + dataSize;
+
+        if (fmt.audioFormat === 1) { // PCM
+            switch (fmt.bitsPerSample) {
+                case 8:
+                    while (offset < end) { samples[sampleIdx++] = (view.getUint8(offset) - 128) / 128.0; offset++; }
+                    break;
+                case 16:
+                    while (offset < end) { samples[sampleIdx++] = view.getInt16(offset, true) / 32768.0; offset+=2; }
+                    break;
+                case 24:
+                    while (offset < end) {
+                        let val = (view.getUint8(offset+2) << 24) | (view.getUint8(offset+1) << 16) | (view.getUint8(offset) << 8);
+                        val = val >> 8;
+                        samples[sampleIdx++] = val / 8388608.0;
+                        offset += 3;
+                    }
+                    break;
+                case 32:
+                    while (offset < end) { samples[sampleIdx++] = view.getInt32(offset, true) / 2147483648.0; offset+=4; }
+                    break;
+                default: throw new Error('不支持的位深度');
+            }
+        } else if (fmt.audioFormat === 3) { // Float
+            if (fmt.bitsPerSample !== 32) throw new Error('浮点仅支持32位');
+            while (offset < end) { samples[sampleIdx++] = view.getFloat32(offset, true); offset+=4; }
+        } else {
+            throw new Error('不支持的音频格式');
+        }
+        return { samples, params: { ...fmt, totalSamples } };
+    }
+
+    // ---------- 格式化预览 ----------
+    function formatBinaryFull(bytes) {
+        if (!bytes || bytes.length === 0) return "(无数据)";
+        const lines = [];
+        const bytesPerLine = 16;
+        for (let i = 0; i < bytes.length; i += bytesPerLine) {
+            const offset = i;
+            const chunk = bytes.slice(i, Math.min(i + bytesPerLine, bytes.length));
+            const hexOffset = offset.toString(16).toUpperCase().padStart(8, '0');
+            const binParts = [];
+            for (let j = 0; j < chunk.length; j++) binParts.push(chunk[j].toString(2).padStart(8, '0'));
+            lines.push(`${hexOffset}  ${binParts.join(' ')}`);
+        }
+        return lines.join('\n');
+    }
+
+    function formatHexFull(bytes) {
+        if (!bytes || bytes.length === 0) return "(无数据)";
+        const lines = [];
+        const bytesPerLine = 16;
+        for (let i = 0; i < bytes.length; i += bytesPerLine) {
+            const offset = i;
+            const chunk = bytes.slice(i, Math.min(i + bytesPerLine, bytes.length));
+            const hexOffset = offset.toString(16).toUpperCase().padStart(8, '0');
+            const hexParts = [];
+            for (let j = 0; j < chunk.length; j++) hexParts.push(chunk[j].toString(16).padStart(2, '0').toUpperCase());
+            while (hexParts.length < bytesPerLine) hexParts.push('  ');
+            lines.push(`${hexOffset}  ${hexParts.join(' ')}`);
+        }
+        return lines.join('\n');
+    }
+
+    function formatUtf8WithOffset(bytes, rowSize = 16) {
+        if (!bytes || bytes.length === 0) return "(无数据)";
+        const lines = [];
+        const decoder = new TextDecoder('utf-8', { fatal: false });
+        for (let i = 0; i < bytes.length; i += rowSize) {
+            const offset = i;
+            const chunk = bytes.slice(i, Math.min(i + rowSize, bytes.length));
+            let decoded = "";
+            try { decoded = decoder.decode(chunk); } catch(e) { decoded = "�"; }
+            let displayText = "";
+            for (let ch of decoded) {
+                const code = ch.charCodeAt(0);
+                if (code < 0x20 || code === 0x7F) displayText += '·';
+                else displayText += ch;
+            }
+            const hexOffset = offset.toString(16).toUpperCase().padStart(8, '0');
+            lines.push(`${hexOffset}  ${displayText}`);
+        }
+        return lines.join('\n');
+    }
+
+    // ---------- 查找高亮 (完全复用图片工具逻辑) ----------
+    function storeRawLinesFromContainer(container, linesArray) {
+        if (!container) return;
+        const pre = container.querySelector('pre');
+        if (!pre) return;
+        const text = pre.innerText;
+        const rows = text.split('\n');
+        linesArray.length = 0;
+        for (let row of rows) {
+            if (row.trim() === "") continue;
+            const match = row.match(/^([0-9A-Fa-f]+)\s+(.*)$/);
+            if (match) linesArray.push({ offsetHex: match[1], dataStr: match[2] });
+            else linesArray.push({ offsetHex: "", dataStr: row });
+        }
+    }
+
+    function rebuildViewFromLines(container, lines) {
+        if (!lines.length) { container.innerHTML = "<pre style='margin:0'>—</pre>"; return; }
+        const html = lines.map(line => `${escapeHtml(line.offsetHex)}  ${escapeHtml(line.dataStr)}`).join('\n');
+        container.innerHTML = `<pre style="margin:0;font-family:inherit">${html}</pre>`;
+    }
+
+    function highlightInView(container, rawLines, mode, keywordRaw) {
+        if (!rawLines.length || !keywordRaw.trim()) {
+            rebuildViewFromLines(container, rawLines);
+            return [];
+        }
+        let keyword = keywordRaw;
+        if (mode === "binary") {
+            keyword = keyword.replace(/\s/g, '');
+            if (!/^[01]+$/.test(keyword)) return [];
+        } else if (mode === "hex") {
+            keyword = keyword.replace(/\s/g, '').toUpperCase();
+            if (!/^[0-9A-F]+$/.test(keyword)) return [];
+        }
+        const matches = [];
+        const newHtmlLines = [];
+        for (let li = 0; li < rawLines.length; li++) {
+            const line = rawLines[li];
+            let dataPart = line.dataStr;
+            let highlightedData = "";
+            let last = 0;
+            let matchPositions = [];
+            if (mode === "binary") {
+                const rawNoSpace = dataPart.replace(/\s/g, '');
+                let pos = 0, kwLen = keyword.length;
+                while ((pos = rawNoSpace.indexOf(keyword, pos)) !== -1) {
+                    let origStart = 0, origEnd = 0, charCount = 0;
+                    for (let i = 0; i < dataPart.length; i++) {
+                        if (dataPart[i] !== ' ') {
+                            if (charCount === pos) origStart = i;
+                            if (charCount === pos + kwLen - 1) { origEnd = i; break; }
+                            charCount++;
+                        }
+                    }
+                    if (origEnd === 0 && kwLen === 1) origEnd = origStart;
+                    let endIdx = origEnd + 1;
+                    while (endIdx < dataPart.length && dataPart[endIdx] === ' ') endIdx++;
+                    matchPositions.push({ start: origStart, end: endIdx });
+                    pos += kwLen;
+                }
+            } else if (mode === "hex") {
+                const rawNoSpace = dataPart.replace(/\s/g, '');
+                let pos = 0, kwLen = keyword.length;
+                while ((pos = rawNoSpace.indexOf(keyword, pos)) !== -1) {
+                    let origStart = 0, origEnd = 0, charCount = 0;
+                    for (let i = 0; i < dataPart.length; i++) {
+                        if (dataPart[i] !== ' ') {
+                            if (charCount === pos) origStart = i;
+                            if (charCount === pos + kwLen - 1) { origEnd = i; break; }
+                            charCount++;
+                        }
+                    }
+                    if (origEnd === 0 && kwLen === 1) origEnd = origStart;
+                    let endIdx = origEnd + 1;
+                    while (endIdx < dataPart.length && dataPart[endIdx] === ' ') endIdx++;
+                    matchPositions.push({ start: origStart, end: endIdx });
+                    pos += kwLen;
+                }
+            } else {
+                const lowerData = dataPart.toLowerCase();
+                const lowerKw = keyword.toLowerCase();
+                let pos = 0;
+                while ((pos = lowerData.indexOf(lowerKw, pos)) !== -1) {
+                    matchPositions.push({ start: pos, end: pos + keyword.length });
+                    pos += keyword.length;
+                }
+            }
+            if (matchPositions.length) {
+                matchPositions.sort((a,b) => a.start - b.start);
+                for (let mp of matchPositions) {
+                    highlightedData += escapeHtml(dataPart.slice(last, mp.start));
+                    highlightedData += `<mark class="search-highlight">${escapeHtml(dataPart.slice(mp.start, mp.end))}</mark>`;
+                    last = mp.end;
+                    matches.push({ lineIdx: li, startChar: mp.start, endChar: mp.end });
+                }
+                highlightedData += escapeHtml(dataPart.slice(last));
+            } else {
+                highlightedData = escapeHtml(dataPart);
+            }
+            newHtmlLines.push(`${escapeHtml(line.offsetHex)}  ${highlightedData}`);
+        }
+        container.innerHTML = `<pre style="margin:0;font-family:inherit">${newHtmlLines.join('\n')}</pre>`;
+        const marks = container.querySelectorAll('mark.search-highlight');
+        return Array.from(marks).map(el => ({ element: el, container }));
+    }
+
+    function clearAllHighlights() {
+        if (rawBinaryLines.length) rebuildViewFromLines(binaryResultDiv, rawBinaryLines);
+        if (rawHexLines.length) rebuildViewFromLines(hexResultDiv, rawHexLines);
+        if (rawUtf8Lines.length) rebuildViewFromLines(utf8ResultDiv, rawUtf8Lines);
+        currentMatchRanges = [];
+        currentMatchIndex = -1;
+        matchCounter.innerText = "0 / 0";
+        lastSearchKeyword = "";
+    }
+
+    function highlightCurrentMatch() {
+        if (!currentMatchRanges.length || currentMatchIndex < 0) return;
+        currentMatchRanges.forEach((r, i) => {
+            if (r.element) {
+                if (i === currentMatchIndex) r.element.classList.add('current');
+                else r.element.classList.remove('current');
+            }
+        });
+        matchCounter.innerText = `${currentMatchIndex+1} / ${currentMatchRanges.length}`;
+        if (currentMatchRanges[currentMatchIndex]?.element) {
+            currentMatchRanges[currentMatchIndex].element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    function performSearch() {
+        let keyword = searchKeyword.value.trim();
+        if (!keyword) { clearAllHighlights(); return; }
+        const view = searchView.value;
+        currentSearchViewMode = view;
+        lastSearchKeyword = keyword;
+        let targetLines, targetContainer;
+        if (view === "binary") { targetLines = rawBinaryLines; targetContainer = binaryResultDiv; }
+        else if (view === "hex") { targetLines = rawHexLines; targetContainer = hexResultDiv; }
+        else { targetLines = rawUtf8Lines; targetContainer = utf8ResultDiv; }
+        if (!targetLines.length) { setInfo("当前视图无数据", true); return; }
+        if (view !== "binary") rebuildViewFromLines(binaryResultDiv, rawBinaryLines);
+        if (view !== "hex") rebuildViewFromLines(hexResultDiv, rawHexLines);
+        if (view !== "utf8") rebuildViewFromLines(utf8ResultDiv, rawUtf8Lines);
+        let mode = view === "binary" ? "binary" : (view === "hex" ? "hex" : "utf8");
+        const matchElements = highlightInView(targetContainer, targetLines, mode, keyword);
+        currentMatchRanges = matchElements;
+        currentMatchIndex = currentMatchRanges.length ? 0 : -1;
+        matchCounter.innerText = currentMatchRanges.length ? `1 / ${currentMatchRanges.length}` : "0 / 0";
+        if (currentMatchRanges.length) highlightCurrentMatch();
+        else setInfo(`未找到匹配: "${keyword}"`, false);
+    }
+
+    function nextMatch() {
+        if (!currentMatchRanges.length) return;
+        currentMatchIndex = (currentMatchIndex + 1) % currentMatchRanges.length;
+        highlightCurrentMatch();
+    }
+
+    function prevMatch() {
+        if (!currentMatchRanges.length) return;
+        currentMatchIndex = (currentMatchIndex - 1 + currentMatchRanges.length) % currentMatchRanges.length;
+        highlightCurrentMatch();
+    }
+
+    function afterExtractStoreLines() {
+        storeRawLinesFromContainer(binaryResultDiv, rawBinaryLines);
+        storeRawLinesFromContainer(hexResultDiv, rawHexLines);
+        storeRawLinesFromContainer(utf8ResultDiv, rawUtf8Lines);
+        clearAllHighlights();
+        if (searchKeyword.value.trim()) performSearch();
+    }
+
+    // ---------- 提取核心 Worker ----------
+    function createExtractWorker() {
+        const workerCode = `
+            self.onmessage = function(e) {
+                const { samples, embedSeq, offsetSlots, bitsPerSample, audioFormat, totalSamples, maxExtractBytes, chunkByteSize } = e.data;
+                try {
+                    const seqLen = embedSeq.length;
+                    if (seqLen === 0) throw new Error("嵌入顺序为空");
+                    const totalSlots = totalSamples * seqLen;
+                    if (offsetSlots > totalSlots) throw new Error("偏移量超过总槽位数");
+                    
+                    let bitBuffer = 0, bitCount = 0;
+                    let byteBuffer = [];
+                    let totalBytesSent = 0;
+                    let stopFlag = false;
+                    let globalSlot = 0;
+                    const maxBytesLimit = maxExtractBytes > 0 ? maxExtractBytes : Infinity;
+                    const step = 1.0 / (1 << (bitsPerSample - 1));
+                    
+                    outerLoop:
+                    for (let s = 0; s < totalSamples; s++) {
+                        for (let seq of embedSeq) {
+                            if (globalSlot >= offsetSlots) {
+                                const bitPos = seq.bitIndex;
+                                let val = samples[s];
+                                let bit;
+                                if (audioFormat === 3) {
+                                    const farr = new Float32Array(1);
+                                    farr[0] = val;
+                                    const bytes = new Uint8Array(farr.buffer);
+                                    const byteIdx = Math.floor(bitPos / 8);
+                                    const bitInByte = bitPos % 8;
+                                    bit = (bytes[byteIdx] >> bitInByte) & 1;
+                                } else {
+                                    const intVal = Math.round(val / step);
+                                    bit = (intVal >> bitPos) & 1;
+                                }
+                                if (bit === 1) bitBuffer |= (1 << bitCount);
+                                bitCount++;
+                                if (bitCount === 8) {
+                                    byteBuffer.push(bitBuffer);
+                                    totalBytesSent++;
+                                    if (totalBytesSent >= maxBytesLimit) {
+                                        stopFlag = true;
+                                        if (byteBuffer.length) {
+                                            self.postMessage({ type: 'chunk', data: new Uint8Array(byteBuffer) });
+                                            byteBuffer = [];
+                                        }
+                                        break outerLoop;
+                                    }
+                                    bitBuffer = 0;
+                                    bitCount = 0;
+                                    if (byteBuffer.length >= chunkByteSize) {
+                                        self.postMessage({ type: 'chunk', data: new Uint8Array(byteBuffer) });
+                                        byteBuffer = [];
+                                    }
+                                }
+                            }
+                            globalSlot++;
+                        }
+                        if (s % 50000 === 0 && !stopFlag) {
+                            const percent = (s / totalSamples) * 100;
+                            self.postMessage({ type: 'progress', percent, text: \`提取中 \${Math.round(percent)}% (\${s.toLocaleString()}/\${totalSamples.toLocaleString()} 样本)\` });
+                        }
+                    }
+                    if (!stopFlag && byteBuffer.length) {
+                        self.postMessage({ type: 'chunk', data: new Uint8Array(byteBuffer) });
+                    }
+                    self.postMessage({ type: 'complete', totalBytes: totalBytesSent, reachedLimit: stopFlag });
+                } catch(err) {
+                    self.postMessage({ type: 'error', message: err.message });
+                }
+            };
+        `;
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        return new Worker(URL.createObjectURL(blob));
+    }
+
+    async function performExtract() {
+        if (!audioSamples || !wavParams) throw new Error('请先加载WAV文件');
+        if (embedSequence.length === 0) throw new Error('请先定义嵌入顺序');
+        const offsetSlots = parseInt(extractOffset.value, 10) || 0;
+        let maxBytes = parseInt(maxExtractBytesInput.value, 10) || 0;
+        if (maxBytes > MAX_EXTRACT_BYTES) { maxBytes = MAX_EXTRACT_BYTES; maxExtractBytesInput.value = maxBytes; }
+        const totalSlots = wavParams.totalSamples * embedSequence.length;
+        if (offsetSlots > totalSlots) throw new Error(`偏移量超过最大槽位数 ${totalSlots}`);
+        
+        accumulatedChunks = [];
+        totalExtractedBytes = 0;
+        extractedBytes = null;
+        resultArea.style.display = 'none';
+        if (worker) worker.terminate();
+        const CHUNK_SIZE = 1024 * 1024;
+        worker = createExtractWorker();
+        
+        showProgress(true, 0, "启动Worker...");
+        setInfo(`⏳ 提取中，顺序长度 ${embedSequence.length}，偏移 ${offsetSlots}`);
+        
+        return new Promise((resolve, reject) => {
+            let isResolved = false;
+            worker.onmessage = (e) => {
+                const msg = e.data;
+                if (msg.type === 'progress') {
+                    extractProgress.style.width = `${msg.percent}%`;
+                    progressText.innerText = msg.text;
+                } else if (msg.type === 'chunk') {
+                    if (msg.data?.length) {
+                        totalExtractedBytes += msg.data.length;
+                        if (totalExtractedBytes > MAX_EXTRACT_BYTES) { worker.terminate(); reject(new Error("超出最大提取限制")); return; }
+                        accumulatedChunks.push(msg.data);
+                        progressText.innerText = `已提取 ${totalExtractedBytes.toLocaleString()} 字节...`;
+                    }
+                } else if (msg.type === 'complete') {
+                    if (isResolved) return;
+                    isResolved = true;
+                    try {
+                        const totalLen = accumulatedChunks.reduce((s, a) => s + a.length, 0);
+                        const finalBytes = new Uint8Array(totalLen);
+                        let pos = 0;
+                        for (const c of accumulatedChunks) { finalBytes.set(c, pos); pos += c.length; }
+                        extractedBytes = finalBytes;
+                        showProgress(false);
+                        resultArea.style.display = 'block';
+                        extractedSizeSpan.innerText = extractedBytes.length.toLocaleString();
+                        extractLimitStatus.innerText = maxBytes > 0 && msg.reachedLimit ? `(已达到指定限制 ${maxBytes.toLocaleString()} 字节)` : `(全部可用数据)`;
+                        displayExtractedData(extractedBytes);
+                        setInfo(`✅ 提取完成！共 ${extractedBytes.length.toLocaleString()} 字节`);
+                        resolve();
+                    } catch(err) {
+                        reject(err);
+                    } finally {
+                        worker.terminate();
+                        worker = null;
+                    }
+                } else if (msg.type === 'error') {
+                    reject(new Error(msg.message));
+                    worker.terminate();
+                    worker = null;
+                }
+            };
+            worker.onerror = (err) => { reject(new Error("Worker错误")); worker.terminate(); worker = null; };
+            worker.postMessage({
+                samples: audioSamples,
+                embedSeq: embedSequence,
+                offsetSlots,
+                bitsPerSample: wavParams.bitsPerSample,
+                audioFormat: wavParams.audioFormat,
+                totalSamples: wavParams.totalSamples,
+                maxExtractBytes: maxBytes,
+                chunkByteSize: CHUNK_SIZE
+            }, [audioSamples.buffer]);
+        });
+    }
+
+    function displayExtractedData(dataBytes) {
+        let previewBytes = dataBytes;
+        let isTruncated = false;
+        if (dataBytes.length > MAX_PREVIEW_BYTES) {
+            previewBytes = dataBytes.slice(0, MAX_PREVIEW_BYTES);
+            isTruncated = true;
+        }
+        binaryResultDiv.innerHTML = `<pre>${escapeHtml(formatBinaryFull(previewBytes))}</pre>`;
+        hexResultDiv.innerHTML = `<pre>${escapeHtml(formatHexFull(previewBytes))}</pre>`;
+        utf8ResultDiv.innerHTML = `<pre>${escapeHtml(formatUtf8WithOffset(previewBytes))}</pre>`;
+        truncationWarningDiv.style.display = isTruncated ? 'block' : 'none';
+        if (isTruncated) truncationWarningDiv.innerHTML = `⚠️ 提取数据共 ${dataBytes.length.toLocaleString()} 字节，预览仅显示前 ${MAX_PREVIEW_BYTES.toLocaleString()} 字节。`;
+        afterExtractStoreLines();
+    }
+
+    async function onExtractClick() {
+        extractBtn.disabled = true;
+        try {
+            await performExtract();
+        } catch(err) {
+            setInfo(`提取失败: ${err.message}`, true);
+            showProgress(false);
+            resultArea.style.display = 'none';
+        } finally {
+            extractBtn.disabled = false;
+        }
+    }
+
+    function saveExtractedAsFile() {
+        if (!extractedBytes) { setInfo("无数据可保存", true); return; }
+        const blob = new Blob([extractedBytes], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'extracted_from_wav.bin';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // ---------- 音频加载 ----------
+    async function onAudioSelected(file) {
+        if (!file) return;
+        audioPreviewContainer.innerHTML = `<audio controls src="${URL.createObjectURL(file)}" style="width:100%; max-width:400px;"></audio>`;
+        try {
+            const buf = await file.arrayBuffer();
+            const { samples, params } = parseWavFile(buf);
+            audioSamples = samples;
+            wavParams = params;
+            generateBitCheckboxes(params.bitsPerSample);
+            embedSequence = [];
+            refreshOrderUI();
+            loadModeInfo.innerHTML = `✅ 采样率 ${params.sampleRate} Hz · ${params.channels}声道 · ${params.bitsPerSample}bit · 总样本 ${params.totalSamples.toLocaleString()}`;
+            loadModeInfo.style.background = '#dcfce7';
+            setInfo(`音频加载成功，总样本数 ${params.totalSamples.toLocaleString()}`);
+            resultArea.style.display = 'none';
+            extractedBytes = null;
+            clearAllHighlights();
+        } catch(err) {
+            loadModeInfo.innerHTML = `❌ 解析失败: ${err.message}`;
+            loadModeInfo.style.background = '#fee2e2';
+            setInfo(err.message, true);
+        }
+    }
+
+    // ---------- 事件绑定 ----------
+    stegoAudioUpload.addEventListener('change', e => { if(e.target.files[0]) onAudioSelected(e.target.files[0]); });
+    resetOrderBtn.addEventListener('click', () => { embedSequence = []; refreshOrderUI(); setInfo('顺序已清空'); });
+    extractBtn.addEventListener('click', onExtractClick);
+    saveAsFileBtn.addEventListener('click', saveExtractedAsFile);
+    extractOffset.addEventListener('input', () => { resultArea.style.display = 'none'; extractedBytes = null; });
+    maxExtractBytesInput.addEventListener('input', () => { resultArea.style.display = 'none'; extractedBytes = null; });
+    
+    searchBtn.addEventListener('click', performSearch);
+    clearHighlightBtn.addEventListener('click', () => { clearAllHighlights(); setInfo("已清除高亮"); });
+    prevMatchBtn.addEventListener('click', prevMatch);
+    nextMatchBtn.addEventListener('click', nextMatch);
+
+    // 初始化
+    generateBitCheckboxes(16); // 默认占位
+    setInfo("就绪，请上传WAV文件并定义与嵌入时完全相同的顺序和偏移量。");
+})();
+</script>
+</body>
+</html>
